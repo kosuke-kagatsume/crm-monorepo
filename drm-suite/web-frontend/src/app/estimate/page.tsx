@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -10,8 +10,10 @@ import { estimateClient } from '@/lib/api/estimateClient'
 import { Estimate } from '@/types/estimate-v2'
 import { CopyFromTemplateDialog } from '@/components/estimate/CopyFromTemplateDialog'
 
-export default function EstimateListPage() {
+function EstimateListContent() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const projectId = searchParams.get('projectId')
   const [estimates, setEstimates] = useState<Estimate[]>([])
   const [loading, setLoading] = useState(true)
   const [showTemplateDialog, setShowTemplateDialog] = useState(false)
@@ -31,12 +33,16 @@ export default function EstimateListPage() {
 
   useEffect(() => {
     fetchEstimates()
-  }, [])
+  }, [projectId])
 
   const fetchEstimates = async () => {
     try {
       setLoading(true)
-      const response = await fetch('/api/estimates')
+      // projectIdがある場合はフィルタリング
+      const url = projectId 
+        ? `/api/estimates?projectId=${projectId}`
+        : '/api/estimates'
+      const response = await fetch(url)
       const data = await response.json()
       setEstimates(data.estimates || [])
     } catch (error) {
@@ -168,6 +174,22 @@ export default function EstimateListPage() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* 案件フィルター表示 */}
+        {projectId && (
+          <div className="mb-4 p-4 bg-blue-50 rounded-lg flex justify-between items-center">
+            <div>
+              <span className="text-sm font-medium text-blue-800">🔍 案件ID: {projectId} に関連する見積を表示中</span>
+            </div>
+            <Button 
+              onClick={() => router.push('/estimate')}
+              size="sm"
+              variant="outline"
+            >
+              すべて表示
+            </Button>
+          </div>
+        )}
+        
         {/* 統計カード */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
           <Card>
@@ -409,5 +431,20 @@ export default function EstimateListPage() {
         onSelect={handleTemplateSelect}
       />
     </div>
+  )
+}
+
+export default function EstimateListPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">読み込み中...</p>
+        </div>
+      </div>
+    }>
+      <EstimateListContent />
+    </Suspense>
   )
 }

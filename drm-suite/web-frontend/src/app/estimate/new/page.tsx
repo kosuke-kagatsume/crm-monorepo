@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -9,18 +9,43 @@ import { CopyFromTemplateDialog } from '@/components/estimate/CopyFromTemplateDi
 import { EstimateEditor } from '@/components/estimate/EstimateEditor'
 import { Estimate } from '@/types/estimate-v2'
 
-export default function NewEstimatePage() {
+function NewEstimateContent() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [showTemplateDialog, setShowTemplateDialog] = useState(false)
+  
+  // URLパラメータから初期値を設定
+  const projectId = searchParams.get('projectId')
+  const customerFromUrl = searchParams.get('customer')
+  const titleFromUrl = searchParams.get('title')
+  
   const [basicInfo, setBasicInfo] = useState({
-    title: '',
+    title: titleFromUrl || '',
     customerId: '',
     storeId: '',
     method: '',
     structure: '',
-    category: ''
+    category: '',
+    projectId: projectId || ''
   })
   const [showEditor, setShowEditor] = useState(false)
+  
+  useEffect(() => {
+    // URLパラメータがある場合、顧客名から顧客IDを解決（実際はAPIから取得）
+    if (customerFromUrl) {
+      // モックで顧客IDを設定
+      const customerMap: Record<string, string> = {
+        '山田太郎': 'CUST-001',
+        '鈴木一郎': 'CUST-002',
+        '田中花子': 'CUST-003',
+        '佐藤次郎': 'CUST-004'
+      }
+      setBasicInfo(prev => ({
+        ...prev,
+        customerId: customerMap[customerFromUrl] || 'CUST-001'
+      }))
+    }
+  }, [customerFromUrl])
 
   const handleTemplateSelect = (template: any) => {
     // テンプレートから基本情報を設定
@@ -133,6 +158,19 @@ export default function NewEstimatePage() {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="max-w-2xl mx-auto">
+          {/* 案件連携情報 */}
+          {projectId && (
+            <div className="mb-4 p-4 bg-blue-50 rounded-lg">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium text-blue-800">🔗 案件連携中</span>
+                <span className="text-sm text-blue-600">案件ID: {projectId}</span>
+              </div>
+              {titleFromUrl && (
+                <p className="text-xs text-blue-600 mt-1">案件名: {titleFromUrl}</p>
+              )}
+            </div>
+          )}
+          
           {/* 基本情報入力 */}
           <Card className="mb-6">
             <CardHeader>
@@ -264,5 +302,20 @@ export default function NewEstimatePage() {
         }}
       />
     </div>
+  )
+}
+
+export default function NewEstimatePage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">読み込み中...</p>
+        </div>
+      </div>
+    }>
+      <NewEstimateContent />
+    </Suspense>
   )
 }
