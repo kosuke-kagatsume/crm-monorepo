@@ -1,8 +1,10 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { useSearchParams } from 'next/navigation';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { useFeatureFlag } from '@/config/featureFlags';
 import Link from 'next/link';
 
 interface Project {
@@ -20,6 +22,8 @@ interface Project {
 export function ProjectsSnap() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
+  const searchParams = useSearchParams();
+  const newEstimateEnabled = useFeatureFlag('new_estimate', searchParams);
 
   useEffect(() => {
     fetchProjects();
@@ -37,7 +41,7 @@ export function ProjectsSnap() {
         progress: 45,
         amount: 1350000,
         startDate: '2024-01-15',
-        endDate: '2024-02-28'
+        endDate: '2024-02-28',
       },
       {
         id: 'PRJ-002',
@@ -47,7 +51,7 @@ export function ProjectsSnap() {
         estimateStatus: 'draft',
         progress: 0,
         amount: 850000,
-        startDate: '2024-02-01'
+        startDate: '2024-02-01',
       },
       {
         id: 'PRJ-003',
@@ -57,7 +61,7 @@ export function ProjectsSnap() {
         estimateStatus: 'none',
         progress: 0,
         amount: 2200000,
-        startDate: '2024-02-15'
+        startDate: '2024-02-15',
       },
       {
         id: 'PRJ-004',
@@ -68,10 +72,10 @@ export function ProjectsSnap() {
         progress: 100,
         amount: 980000,
         startDate: '2023-12-01',
-        endDate: '2024-01-10'
-      }
+        endDate: '2024-01-10',
+      },
     ];
-    
+
     setProjects(mockProjects);
     setLoading(false);
   };
@@ -94,12 +98,24 @@ export function ProjectsSnap() {
   const getEstimateStatusBadge = (status?: Project['estimateStatus']) => {
     switch (status) {
       case 'approved':
-        return <Badge variant="outline" className="text-xs">見積承認済</Badge>;
+        return (
+          <Badge variant="outline" className="text-xs">
+            見積承認済
+          </Badge>
+        );
       case 'draft':
-        return <Badge variant="outline" className="text-xs">見積作成中</Badge>;
+        return (
+          <Badge variant="outline" className="text-xs">
+            見積作成中
+          </Badge>
+        );
       case 'none':
       default:
-        return <Badge variant="outline" className="text-xs">見積未作成</Badge>;
+        return (
+          <Badge variant="outline" className="text-xs">
+            見積未作成
+          </Badge>
+        );
     }
   };
 
@@ -132,8 +148,8 @@ export function ProjectsSnap() {
       <CardContent>
         <div className="space-y-3">
           {projects.slice(0, 4).map((project) => (
-            <div 
-              key={project.id} 
+            <div
+              key={project.id}
               className="border rounded-lg p-3 hover:bg-gray-50 transition-colors"
             >
               <div className="flex justify-between items-start mb-2">
@@ -155,7 +171,7 @@ export function ProjectsSnap() {
                   {getEstimateStatusBadge(project.estimateStatus)}
                 </div>
               </div>
-              
+
               {/* 進捗バー */}
               {project.status === 'active' && (
                 <div className="mb-2">
@@ -164,23 +180,36 @@ export function ProjectsSnap() {
                     <span>{project.progress}%</span>
                   </div>
                   <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div 
+                    <div
                       className="bg-blue-600 h-2 rounded-full"
                       style={{ width: `${project.progress}%` }}
                     />
                   </div>
                 </div>
               )}
-              
+
               {/* アクションボタン */}
               <div className="flex gap-2 mt-2">
-                {/* 見積ボタン - projectIdパラメータ付きでリンク */}
+                {/* 見積ボタン - projectIdパラメータ付きでリンク（フラグ制御） */}
                 {project.estimateStatus === 'none' ? (
-                  <Link href={`/estimate/new?projectId=${project.id}&customer=${encodeURIComponent(project.customer)}&title=${encodeURIComponent(project.name)}`}>
-                    <Button size="sm" variant="outline" className="text-xs">
-                      見積作成
+                  newEstimateEnabled ? (
+                    <Link
+                      href={`/estimate/new?projectId=${project.id}&customer=${encodeURIComponent(project.customer)}&title=${encodeURIComponent(project.name)}`}
+                    >
+                      <Button size="sm" variant="outline" className="text-xs">
+                        見積作成
+                      </Button>
+                    </Link>
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="text-xs"
+                      disabled
+                    >
+                      見積作成（準備中）
                     </Button>
-                  </Link>
+                  )
                 ) : project.estimateStatus === 'draft' ? (
                   <Link href={`/estimate?projectId=${project.id}`}>
                     <Button size="sm" variant="outline" className="text-xs">
@@ -194,7 +223,7 @@ export function ProjectsSnap() {
                     </Button>
                   </Link>
                 )}
-                
+
                 {/* 詳細ボタン - /projectsへのリンク */}
                 <Link href={`/projects/${project.id}`}>
                   <Button size="sm" variant="ghost" className="text-xs">
@@ -204,30 +233,43 @@ export function ProjectsSnap() {
               </div>
             </div>
           ))}
-          
+
           {projects.length === 0 && (
             <div className="text-center py-8 text-gray-500">
               <p className="text-sm">進行中の案件はありません</p>
-              <Link href="/estimate/new">
-                <Button className="mt-3" size="sm">
-                  新規見積を作成
+              {newEstimateEnabled ? (
+                <Link href="/estimate/new">
+                  <Button className="mt-3" size="sm">
+                    新規見積を作成
+                  </Button>
+                </Link>
+              ) : (
+                <Button className="mt-3" size="sm" disabled>
+                  新規見積を作成（準備中）
                 </Button>
-              </Link>
+              )}
             </div>
           )}
         </div>
-        
+
         {/* クイックアクション */}
         <div className="mt-4 pt-4 border-t">
           <div className="flex justify-between items-center">
             <span className="text-xs text-gray-600">
-              アクティブ案件: {projects.filter(p => p.status === 'active').length}件
+              アクティブ案件:{' '}
+              {projects.filter((p) => p.status === 'active').length}件
             </span>
-            <Link href="/estimate/new">
-              <Button size="sm" className="text-xs">
-                + 新規見積
+            {newEstimateEnabled ? (
+              <Link href="/estimate/new">
+                <Button size="sm" className="text-xs">
+                  + 新規見積
+                </Button>
+              </Link>
+            ) : (
+              <Button size="sm" className="text-xs" disabled>
+                + 新規見積（準備中）
               </Button>
-            </Link>
+            )}
           </div>
         </div>
       </CardContent>

@@ -1,23 +1,25 @@
-'use client'
+'use client';
 
-import { useState, useEffect, Suspense } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { Input } from '@/components/ui/input'
-import { estimateClient } from '@/lib/api/estimateClient'
-import { Estimate } from '@/types/estimate-v2'
-import { CopyFromTemplateDialog } from '@/components/estimate/CopyFromTemplateDialog'
+import { useState, useEffect, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { estimateClient } from '@/lib/api/estimateClient';
+import { Estimate } from '@/types/estimate-v2';
+import { CopyFromTemplateDialog } from '@/components/estimate/CopyFromTemplateDialog';
+import { useFeatureFlag } from '@/config/featureFlags';
 
 function EstimateListContent() {
-  const router = useRouter()
-  const searchParams = useSearchParams()
-  const projectId = searchParams.get('projectId')
-  const [estimates, setEstimates] = useState<Estimate[]>([])
-  const [loading, setLoading] = useState(true)
-  const [showTemplateDialog, setShowTemplateDialog] = useState(false)
-  
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const projectId = searchParams.get('projectId');
+  const newEstimateEnabled = useFeatureFlag('new_estimate', searchParams);
+  const [estimates, setEstimates] = useState<Estimate[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showTemplateDialog, setShowTemplateDialog] = useState(false);
+
   // フィルター状態
   const [filters, setFilters] = useState({
     search: '',
@@ -28,63 +30,71 @@ function EstimateListContent() {
     method: 'all',
     structure: 'all',
     reformArea: 'all',
-    status: 'all'
-  })
+    status: 'all',
+  });
 
   useEffect(() => {
-    fetchEstimates()
-  }, [projectId])
+    fetchEstimates();
+  }, [projectId]);
 
   const fetchEstimates = async () => {
     try {
-      setLoading(true)
+      setLoading(true);
       // projectIdがある場合はフィルタリング
-      const url = projectId 
+      const url = projectId
         ? `/api/estimates?projectId=${projectId}`
-        : '/api/estimates'
-      const response = await fetch(url)
-      const data = await response.json()
-      setEstimates(data.estimates || [])
+        : '/api/estimates';
+      const response = await fetch(url);
+      const data = await response.json();
+      setEstimates(data.estimates || []);
     } catch (error) {
-      console.error('Failed to fetch estimates:', error)
+      console.error('Failed to fetch estimates:', error);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const calculateTotal = (estimate: Estimate) => {
-    const version = estimate.versions.find(v => v.id === estimate.selectedVersionId)
-    if (!version) return 0
-    return version.items.reduce((sum, item) => sum + (item.qty * item.price), 0)
-  }
+    const version = estimate.versions.find(
+      (v) => v.id === estimate.selectedVersionId,
+    );
+    if (!version) return 0;
+    return version.items.reduce((sum, item) => sum + item.qty * item.price, 0);
+  };
 
   const getStatusBadge = (estimate: Estimate) => {
     if (!estimate.approval) {
-      return <Badge className="bg-gray-100 text-gray-800">下書き</Badge>
+      return <Badge className="bg-gray-100 text-gray-800">下書き</Badge>;
     }
     switch (estimate.approval.status) {
       case 'approved':
-        return <Badge className="bg-green-100 text-green-800">承認済み</Badge>
+        return <Badge className="bg-green-100 text-green-800">承認済み</Badge>;
       case 'pending':
-        return <Badge className="bg-yellow-100 text-yellow-800">承認待ち</Badge>
+        return (
+          <Badge className="bg-yellow-100 text-yellow-800">承認待ち</Badge>
+        );
       case 'rejected':
-        return <Badge className="bg-red-100 text-red-800">却下</Badge>
+        return <Badge className="bg-red-100 text-red-800">却下</Badge>;
       default:
-        return <Badge className="bg-gray-100 text-gray-800">下書き</Badge>
+        return <Badge className="bg-gray-100 text-gray-800">下書き</Badge>;
     }
-  }
+  };
 
   const getContractBadge = (estimate: Estimate) => {
-    if (!estimate.contract) return null
+    if (!estimate.contract) return null;
     switch (estimate.contract.status) {
       case 'signed':
-        return <Badge className="bg-blue-100 text-blue-800">契約締結</Badge>
+        return <Badge className="bg-blue-100 text-blue-800">契約締結</Badge>;
       case 'sent':
-        return <Badge className="bg-purple-100 text-purple-800">送信済み</Badge>
+        return (
+          <Badge className="bg-purple-100 text-purple-800">送信済み</Badge>
+        );
       case 'draft':
-        return <Badge className="bg-gray-100 text-gray-800">契約書作成中</Badge>
+        return (
+          <Badge className="bg-gray-100 text-gray-800">契約書作成中</Badge>
+        );
     }
-  }
+  };
 
   const handleTemplateSelect = async (template: any) => {
     // テンプレートから見積作成
@@ -94,57 +104,60 @@ function EstimateListContent() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           templateId: template.id,
-          customerId: 'CUST-NEW' // 実際には顧客選択画面を表示
-        })
-      })
-      const data = await response.json()
-      router.push(`/estimate/${data.estimate.id}`)
+          customerId: 'CUST-NEW', // 実際には顧客選択画面を表示
+        }),
+      });
+      const data = await response.json();
+      router.push(`/estimate/${data.estimate.id}`);
     } catch (error) {
-      console.error('Failed to create from template:', error)
+      console.error('Failed to create from template:', error);
     }
-  }
+  };
 
-  const filteredEstimates = estimates.filter(est => {
-    if (filters.search && !est.title.toLowerCase().includes(filters.search.toLowerCase())) {
-      return false
+  const filteredEstimates = estimates.filter((est) => {
+    if (
+      filters.search &&
+      !est.title.toLowerCase().includes(filters.search.toLowerCase())
+    ) {
+      return false;
     }
     if (filters.status !== 'all' && est.approval?.status !== filters.status) {
-      return false
+      return false;
     }
     if (filters.category !== 'all' && est.category !== filters.category) {
-      return false
+      return false;
     }
     if (filters.method !== 'all' && est.method !== filters.method) {
-      return false
+      return false;
     }
     if (filters.structure !== 'all' && est.structure !== filters.structure) {
-      return false
+      return false;
     }
     if (filters.storeId !== 'all' && est.storeId !== filters.storeId) {
-      return false
+      return false;
     }
-    
+
     // 金額帯フィルター
     if (filters.amountRange !== 'all') {
-      const total = calculateTotal(est)
+      const total = calculateTotal(est);
       switch (filters.amountRange) {
         case 'under1m':
-          if (total >= 1000000) return false
-          break
+          if (total >= 1000000) return false;
+          break;
         case '1m-5m':
-          if (total < 1000000 || total >= 5000000) return false
-          break
+          if (total < 1000000 || total >= 5000000) return false;
+          break;
         case '5m-10m':
-          if (total < 5000000 || total >= 10000000) return false
-          break
+          if (total < 5000000 || total >= 10000000) return false;
+          break;
         case 'over10m':
-          if (total < 10000000) return false
-          break
+          if (total < 10000000) return false;
+          break;
       }
     }
-    
-    return true
-  })
+
+    return true;
+  });
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -153,21 +166,26 @@ function EstimateListContent() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-4">
             <div className="flex items-center space-x-4">
-              <button onClick={() => router.push('/home')} className="text-gray-500 hover:text-gray-700">
+              <button
+                onClick={() => router.push('/home')}
+                className="text-gray-500 hover:text-gray-700"
+              >
                 ← ホーム
               </button>
               <h1 className="text-2xl font-bold text-gray-900">見積管理</h1>
             </div>
             <div className="flex gap-2">
-              <Button 
+              <Button
                 onClick={() => setShowTemplateDialog(true)}
                 variant="outline"
               >
                 📋 テンプレから作成
               </Button>
-              <Button onClick={() => router.push('/estimate/new')}>
-                + 新規作成
-              </Button>
+              {newEstimateEnabled && (
+                <Button onClick={() => router.push('/estimate/new')}>
+                  + 新規作成
+                </Button>
+              )}
             </div>
           </div>
         </div>
@@ -178,9 +196,11 @@ function EstimateListContent() {
         {projectId && (
           <div className="mb-4 p-4 bg-blue-50 rounded-lg flex justify-between items-center">
             <div>
-              <span className="text-sm font-medium text-blue-800">🔍 案件ID: {projectId} に関連する見積を表示中</span>
+              <span className="text-sm font-medium text-blue-800">
+                🔍 案件ID: {projectId} に関連する見積を表示中
+              </span>
             </div>
-            <Button 
+            <Button
               onClick={() => router.push('/estimate')}
               size="sm"
               variant="outline"
@@ -189,12 +209,14 @@ function EstimateListContent() {
             </Button>
           </div>
         )}
-        
+
         {/* 統計カード */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-gray-600">総見積件数</CardTitle>
+              <CardTitle className="text-sm font-medium text-gray-600">
+                総見積件数
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{estimates.length}</div>
@@ -203,29 +225,41 @@ function EstimateListContent() {
           </Card>
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-gray-600">承認待ち</CardTitle>
+              <CardTitle className="text-sm font-medium text-gray-600">
+                承認待ち
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-orange-600">
-                {estimates.filter(e => e.approval?.status === 'pending').length}
+                {
+                  estimates.filter((e) => e.approval?.status === 'pending')
+                    .length
+                }
               </div>
               <p className="text-xs text-gray-500 mt-1">要対応</p>
             </CardContent>
           </Card>
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-gray-600">今月の見積総額</CardTitle>
+              <CardTitle className="text-sm font-medium text-gray-600">
+                今月の見積総額
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                ¥{estimates.reduce((sum, e) => sum + calculateTotal(e), 0).toLocaleString()}
+                ¥
+                {estimates
+                  .reduce((sum, e) => sum + calculateTotal(e), 0)
+                  .toLocaleString()}
               </div>
               <p className="text-xs text-gray-500 mt-1">前月比 +18%</p>
             </CardContent>
           </Card>
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-gray-600">成約率</CardTitle>
+              <CardTitle className="text-sm font-medium text-gray-600">
+                成約率
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-green-600">68%</div>
@@ -241,12 +275,16 @@ function EstimateListContent() {
               <Input
                 placeholder="見積名で検索..."
                 value={filters.search}
-                onChange={(e) => setFilters({...filters, search: e.target.value})}
+                onChange={(e) =>
+                  setFilters({ ...filters, search: e.target.value })
+                }
               />
-              
+
               <select
                 value={filters.storeId}
-                onChange={(e) => setFilters({...filters, storeId: e.target.value})}
+                onChange={(e) =>
+                  setFilters({ ...filters, storeId: e.target.value })
+                }
                 className="px-3 py-2 border rounded-lg"
               >
                 <option value="all">全店舗</option>
@@ -257,7 +295,9 @@ function EstimateListContent() {
 
               <select
                 value={filters.assignee}
-                onChange={(e) => setFilters({...filters, assignee: e.target.value})}
+                onChange={(e) =>
+                  setFilters({ ...filters, assignee: e.target.value })
+                }
                 className="px-3 py-2 border rounded-lg"
               >
                 <option value="all">全担当者</option>
@@ -268,7 +308,9 @@ function EstimateListContent() {
 
               <select
                 value={filters.category}
-                onChange={(e) => setFilters({...filters, category: e.target.value})}
+                onChange={(e) =>
+                  setFilters({ ...filters, category: e.target.value })
+                }
                 className="px-3 py-2 border rounded-lg"
               >
                 <option value="all">全物件種別</option>
@@ -280,7 +322,9 @@ function EstimateListContent() {
 
               <select
                 value={filters.amountRange}
-                onChange={(e) => setFilters({...filters, amountRange: e.target.value})}
+                onChange={(e) =>
+                  setFilters({ ...filters, amountRange: e.target.value })
+                }
                 className="px-3 py-2 border rounded-lg"
               >
                 <option value="all">全金額帯</option>
@@ -292,19 +336,25 @@ function EstimateListContent() {
 
               <select
                 value={filters.method}
-                onChange={(e) => setFilters({...filters, method: e.target.value})}
+                onChange={(e) =>
+                  setFilters({ ...filters, method: e.target.value })
+                }
                 className="px-3 py-2 border rounded-lg"
               >
                 <option value="all">全工法</option>
                 <option value="シリコン塗装">シリコン塗装</option>
                 <option value="フッ素塗装">フッ素塗装</option>
                 <option value="瓦交換">瓦交換</option>
-                <option value="システムキッチン交換">システムキッチン交換</option>
+                <option value="システムキッチン交換">
+                  システムキッチン交換
+                </option>
               </select>
 
               <select
                 value={filters.structure}
-                onChange={(e) => setFilters({...filters, structure: e.target.value})}
+                onChange={(e) =>
+                  setFilters({ ...filters, structure: e.target.value })
+                }
                 className="px-3 py-2 border rounded-lg"
               >
                 <option value="all">全構造</option>
@@ -316,7 +366,9 @@ function EstimateListContent() {
 
               <select
                 value={filters.status}
-                onChange={(e) => setFilters({...filters, status: e.target.value})}
+                onChange={(e) =>
+                  setFilters({ ...filters, status: e.target.value })
+                }
                 className="px-3 py-2 border rounded-lg"
               >
                 <option value="all">全ステータス</option>
@@ -332,7 +384,9 @@ function EstimateListContent() {
               <div className="mt-4">
                 <select
                   value={filters.reformArea}
-                  onChange={(e) => setFilters({...filters, reformArea: e.target.value})}
+                  onChange={(e) =>
+                    setFilters({ ...filters, reformArea: e.target.value })
+                  }
                   className="px-3 py-2 border rounded-lg"
                 >
                   <option value="all">全リフォーム箇所</option>
@@ -361,18 +415,34 @@ function EstimateListContent() {
                 <table className="w-full">
                   <thead className="bg-gray-50">
                     <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">見積名</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">顧客ID</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">店舗</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">金額</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">ステータス</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">契約</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">作成日</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">操作</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                        見積名
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                        顧客ID
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                        店舗
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                        金額
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                        ステータス
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                        契約
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                        作成日
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                        操作
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200">
-                    {filteredEstimates.map(estimate => (
+                    {filteredEstimates.map((estimate) => (
                       <tr key={estimate.id} className="hover:bg-gray-50">
                         <td className="px-6 py-4">
                           <div>
@@ -394,21 +464,27 @@ function EstimateListContent() {
                           {getContractBadge(estimate)}
                         </td>
                         <td className="px-6 py-4 text-sm text-gray-500">
-                          {new Date(estimate.createdAt).toLocaleDateString('ja-JP')}
+                          {new Date(estimate.createdAt).toLocaleDateString(
+                            'ja-JP',
+                          )}
                         </td>
                         <td className="px-6 py-4">
                           <div className="flex gap-2">
                             <Button
                               size="sm"
                               variant="outline"
-                              onClick={() => router.push(`/estimate/${estimate.id}`)}
+                              onClick={() =>
+                                router.push(`/estimate/${estimate.id}`)
+                              }
                             >
                               詳細
                             </Button>
                             <Button
                               size="sm"
                               variant="outline"
-                              onClick={() => router.push(`/estimate/${estimate.id}?tab=edit`)}
+                              onClick={() =>
+                                router.push(`/estimate/${estimate.id}?tab=edit`)
+                              }
                             >
                               編集
                             </Button>
@@ -431,20 +507,22 @@ function EstimateListContent() {
         onSelect={handleTemplateSelect}
       />
     </div>
-  )
+  );
 }
 
 export default function EstimateListPage() {
   return (
-    <Suspense fallback={
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">読み込み中...</p>
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+            <p className="mt-4 text-gray-600">読み込み中...</p>
+          </div>
         </div>
-      </div>
-    }>
+      }
+    >
       <EstimateListContent />
     </Suspense>
-  )
+  );
 }
