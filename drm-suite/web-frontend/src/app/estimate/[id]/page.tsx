@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { EstimateEditor } from '@/components/estimate/EstimateEditor'
 import { EstimateView } from '@/components/estimate/EstimateView'
+import { RAGSuggest } from '@/components/estimate/RAGSuggest'
 import { Estimate, EstimateVersion, EstimateItem } from '@/types/estimate-v2'
 
 interface TabPanelProps {
@@ -34,6 +35,7 @@ export default function EstimateDetailPage({ params }: { params: { id: string } 
   const [showBillingDialog, setShowBillingDialog] = useState(false)
   const [showMergeDialog, setShowMergeDialog] = useState(false)
   const [showShortcutHelp, setShowShortcutHelp] = useState(false)
+  const [showRAG, setShowRAG] = useState(false)
 
   useEffect(() => {
     fetchEstimate()
@@ -563,8 +565,37 @@ export default function EstimateDetailPage({ params }: { params: { id: string } 
             </TabPanel>
           </div>
 
-          {/* 右サイドバー - VendorRecommend */}
-          <div className="lg:col-span-1">
+          {/* 右サイドバー - VendorRecommend & RAG */}
+          <div className="lg:col-span-1 space-y-4">
+            {/* RAGサジェストトグル */}
+            <div className="flex justify-end">
+              <Button 
+                onClick={() => setShowRAG(!showRAG)}
+                variant="outline"
+                size="sm"
+                className="w-full"
+              >
+                {showRAG ? '🔍 AIアシスタントを閉じる' : '🤖 AIアシスタントを開く'}
+              </Button>
+            </div>
+            
+            {/* RAGSuggestコンポーネント */}
+            {showRAG && currentVersion && (
+              <RAGSuggest 
+                currentItems={currentVersion.items}
+                context={{
+                  category: estimate.category,
+                  method: estimate.method,
+                  structure: estimate.structure,
+                  storeId: estimate.storeId
+                }}
+                onItemAdd={(item) => {
+                  console.log('項目追加:', item)
+                  alert(`「${item.name}」を明細に追加しました`)
+                }}
+              />
+            )}
+            
             <Card>
               <CardHeader>
                 <CardTitle>🏢 よく使う協力会社</CardTitle>
@@ -625,7 +656,7 @@ export default function EstimateDetailPage({ params }: { params: { id: string } 
             </Card>
 
             {/* 在庫状況 */}
-            <Card className="mt-4">
+            <Card>
               <CardHeader>
                 <CardTitle>📦 在庫状況</CardTitle>
               </CardHeader>
