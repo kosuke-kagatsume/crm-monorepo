@@ -9,16 +9,23 @@ import { Input } from '@/components/ui/input';
 import { estimateClient } from '@/lib/api/estimateClient';
 import { Estimate } from '@/types/estimate-v2';
 import { CopyFromTemplateDialog } from '@/components/estimate/CopyFromTemplateDialog';
-import { useFeatureFlag } from '@/config/featureFlags';
+import { useFeatureFlag, isFlagOn } from '@/config/featureFlags';
+import { FlagDebugger } from '@/components/common/FeatureFlag';
+import { useHomeShortcuts } from '@/components/home/useHomeShortcuts';
+import type { Role } from '@/config/roleDashboard';
+import { roleMapping } from '@/config/roleDashboard';
 
 function EstimateListContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const projectId = searchParams.get('projectId');
-  const newEstimateEnabled = useFeatureFlag('new_estimate', searchParams);
+
+  // 新形式のフラグチェック
+  const newEstimateEnabled = isFlagOn('new_estimate');
   const [estimates, setEstimates] = useState<Estimate[]>([]);
   const [loading, setLoading] = useState(true);
   const [showTemplateDialog, setShowTemplateDialog] = useState(false);
+  const [role, setRole] = useState<Role | null>(null);
 
   // フィルター状態
   const [filters, setFilters] = useState({
@@ -36,6 +43,52 @@ function EstimateListContent() {
   useEffect(() => {
     fetchEstimates();
   }, [projectId]);
+
+  // 役職の取得
+  useEffect(() => {
+    const userRole = localStorage.getItem('userRole');
+    if (userRole && roleMapping[userRole]) {
+      setRole(roleMapping[userRole]);
+    } else {
+      setRole('mgmt');
+    }
+  }, []);
+
+  // 見積画面用のキーボードショートカット
+  const shortcutsForRole: Record<Role, any> = {
+    mgmt: {
+      H: () => router.push('/home'),
+      N: () => router.push('/estimate/new'),
+    },
+    branch: {
+      H: () => router.push('/home'),
+      N: () => router.push('/estimate/new'),
+    },
+    sales: {
+      H: () => router.push('/home'),
+      N: () => router.push('/estimate/new'),
+    },
+    accounting: {
+      H: () => router.push('/home'),
+    },
+    marketing: {
+      H: () => router.push('/home'),
+    },
+    foreman: {
+      H: () => router.push('/home'),
+    },
+    clerk: {
+      H: () => router.push('/home'),
+    },
+    aftercare: {
+      H: () => router.push('/home'),
+    },
+  };
+
+  // 役職別ショートカットを適用
+  useHomeShortcuts(role ? (shortcutsForRole[role] ?? {}) : {}, {
+    enabled: true,
+  });
 
   const fetchEstimates = async () => {
     try {
@@ -159,6 +212,52 @@ function EstimateListContent() {
     return true;
   });
 
+  // Feature Flag が無効な場合のフォールバック画面
+  if (!newEstimateEnabled) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="max-w-md mx-auto text-center p-8">
+          <div className="bg-white rounded-lg shadow-lg p-8">
+            <div className="text-6xl mb-4">🚀</div>
+            <h1 className="text-2xl font-bold text-gray-900 mb-4">
+              新見積システム
+            </h1>
+            <p className="text-gray-600 mb-6">
+              この機能は段階的公開中です。
+              <br />
+              以下のURLで利用可能です：
+            </p>
+            <div className="bg-gray-100 p-3 rounded-lg mb-6">
+              <code className="text-sm text-blue-600">?ff:new_estimate=on</code>
+            </div>
+            <div className="space-y-3">
+              <Button
+                onClick={() => {
+                  const url = new URL(window.location.href);
+                  url.searchParams.set('ff:new_estimate', 'on');
+                  window.location.href = url.toString();
+                }}
+                className="w-full bg-blue-600 hover:bg-blue-700"
+              >
+                新見積システムを試す
+              </Button>
+              <Button
+                onClick={() => router.push('/estimates')}
+                variant="outline"
+                className="w-full"
+              >
+                従来の見積一覧に戻る
+              </Button>
+            </div>
+            <div className="mt-6 pt-6 border-t">
+              <FlagDebugger flag="new_estimate" />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* ヘッダー */}
@@ -173,6 +272,9 @@ function EstimateListContent() {
                 ← ホーム
               </button>
               <h1 className="text-2xl font-bold text-gray-900">見積管理</h1>
+              {process.env.NODE_ENV === 'development' && (
+                <FlagDebugger flag="new_estimate" />
+              )}
             </div>
             <div className="flex gap-2">
               <Button

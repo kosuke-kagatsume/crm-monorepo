@@ -9,3 +9,6 @@ export { AccountingPanel } from './AccountingPanel';
 export { MarketingPanel } from './MarketingPanel';
 export { AftercareFlow } from './AftercareFlow';
 export { RagToggle } from './RagToggle';
+export { EstimateActions } from './EstimateActions';
+export { DashboardActions } from './DashboardActions';
+export { DataTable } from './DataTable';

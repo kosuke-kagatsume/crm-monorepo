@@ -8,6 +8,8 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useFeatureFlag } from '@/config/featureFlags';
+import { maskRAGResponse } from '../../../libs/rag/mask';
+import type { Role } from '@/config/permissions';
 import {
   Search,
   Sparkles,
@@ -15,12 +17,16 @@ import {
   X,
   AlertTriangle,
   BookOpen,
+  Shield,
 } from 'lucide-react';
 
+import { RagPreset } from '@/config/roleWidgets';
+
 interface RAGPanelProps {
-  ragPresets: string[];
+  ragPresets: RagPreset[];
   isVisible: boolean;
   onClose: () => void;
+  userRole?: Role; // 役職情報
 }
 
 interface RAGCitation {
@@ -39,9 +45,20 @@ interface RAGResult {
   citations: RAGCitation[]; // 最低1つの引用が必須
   timestamp: string;
   hasValidCitations: boolean; // 引用検証フラグ
+  isTemplate?: boolean; // テンプレート結果かどうか
+  isError?: boolean; // エラー結果かどうか
+  templates?: string[]; // テンプレート一覧
+  citationWarning?: string; // 引用警告メッセージ
+  redactionsApplied?: boolean; // マスク適用フラグ
+  redactedPatterns?: string[]; // マスクされたパターン
 }
 
-export function RAGPanel({ ragPresets, isVisible, onClose }: RAGPanelProps) {
+export function RAGPanel({
+  ragPresets,
+  isVisible,
+  onClose,
+  userRole = 'sales',
+}: RAGPanelProps) {
   const searchParams = useSearchParams();
   const citationsRequired = useFeatureFlag('rag_citations', searchParams);
   const [query, setQuery] = useState('');
@@ -104,62 +121,89 @@ export function RAGPanel({ ragPresets, isVisible, onClose }: RAGPanelProps) {
   const executeRAG = async (searchQuery: string) => {
     setLoading(true);
     try {
-      // モック実装：1-2秒待機してダミー結果を返す
-      await new Promise((resolve) =>
-        setTimeout(resolve, 1000 + Math.random() * 1000),
-      );
+      // プロジェクト文脈の取得
+      const currentProjectId = localStorage.getItem('currentProjectId') || null;
+      const selectedCustomer = localStorage.getItem('selectedCustomer') || null;
 
-      // ランダムに「見つからない」場合をシミュレート（20%の確率）
-      const shouldShowTemplate = Math.random() < 0.2;
+      // 実際のRAG APIを呼び出し（役職とプロジェクト文脈を含む）
+      const response = await fetch('/api/rag', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          query: searchQuery,
+          role: userRole,
+          context: {
+            projectId: currentProjectId,
+            customer: selectedCustomer,
+            timestamp: new Date().toISOString(),
+          },
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`API エラー: ${response.status}`);
+      }
+
+      const apiResult = await response.json();
 
       let newResult: RAGResult;
 
-      if (shouldShowTemplate) {
-        // ゼロ件時はテンプレート提示
-        newResult = showTemplateResults(searchQuery);
-      } else {
-        // 通常の検索結果
-        const citations = generateMockCitations(searchQuery);
-
+      // APIからテンプレートが返された場合（引用なし）
+      if (apiResult.templates && apiResult.templates.length > 0) {
         newResult = {
-          id: Date.now().toString(),
-          content: `「${searchQuery}」に関する検索結果:\n\n関連するドキュメントから以下の情報が見つかりました。引用元の詳細をご確認ください。`,
-          citations,
-          timestamp: new Date().toISOString(),
-          hasValidCitations: citations.length > 0,
-        };
-      }
-
-      // 引用必須フラグが有効で、引用が無い場合はエラー結果を返す
-      if (
-        citationsRequired &&
-        (!newResult.citations || newResult.citations.length === 0)
-      ) {
-        newResult = {
-          id: `error-${Date.now()}`,
-          content:
-            '申し訳ございません。検索結果に有効な引用元が見つかりませんでした。\n\n信頼性のある情報提供のため、引用元が確認できない結果は表示できません。',
+          id: `template-${Date.now()}`,
+          content: apiResult.answer,
           citations: [],
           timestamp: new Date().toISOString(),
           hasValidCitations: false,
+          isTemplate: true,
+          templates: apiResult.templates,
         };
+      } else {
+        // 通常の検索結果
+        newResult = {
+          id: Date.now().toString(),
+          content: apiResult.answer,
+          citations: apiResult.citations || [],
+          timestamp: new Date().toISOString(),
+          hasValidCitations: (apiResult.citations || []).length > 0,
+          redactionsApplied: apiResult.redactionsApplied,
+          redactedPatterns: apiResult.redactedPatterns,
+        };
+      }
+
+      // 引用必須フラグが有効で、引用が無い場合は警告を追加
+      if (citationsRequired && !newResult.hasValidCitations) {
+        newResult.citationWarning =
+          '⚠️ この回答には検証可能な引用元がありません';
       }
 
       setResults([newResult, ...results.slice(0, 4)]); // 最大5件保持
       setQuery('');
     } catch (error) {
-      console.error('RAG search failed:', error);
+      console.error('RAG検索エラー:', error);
 
-      // エラー時は必ずテンプレート提示
-      const errorResult = showTemplateResults(searchQuery);
+      // エラー結果を追加
+      const errorResult: RAGResult = {
+        id: `error-${Date.now()}`,
+        content:
+          'エラーが発生しました。しばらく時間をおいてからお試しください。',
+        citations: [],
+        timestamp: new Date().toISOString(),
+        hasValidCitations: false,
+        isError: true,
+      };
+
       setResults([errorResult, ...results.slice(0, 4)]);
     } finally {
       setLoading(false);
     }
   };
 
-  const executePreset = (preset: string) => {
-    executeRAG(preset);
+  const executePreset = (preset: RagPreset) => {
+    executeRAG(preset.prompt);
   };
 
   if (!isVisible) return null;
@@ -186,17 +230,25 @@ export function RAGPanel({ ragPresets, isVisible, onClose }: RAGPanelProps) {
 
       {/* プリセットボタン */}
       <div className="p-4 border-b">
-        <div className="grid grid-cols-2 gap-2">
-          {ragPresets.map((preset) => (
+        <div className="text-xs font-medium text-gray-600 mb-3">
+          よく使う質問
+        </div>
+        <div className="grid grid-cols-1 gap-2">
+          {ragPresets.map((preset, index) => (
             <Button
-              key={preset}
+              key={index}
               variant="outline"
               size="sm"
               onClick={() => executePreset(preset)}
               disabled={loading}
-              className="text-xs"
+              className="text-xs h-auto p-3 text-left justify-start whitespace-normal"
+              title={preset.prompt} // ツールチップで詳細表示
             >
-              {preset}
+              <div className="flex items-start gap-2 w-full">
+                <span className="text-blue-600 font-medium flex-shrink-0">
+                  {preset.title}
+                </span>
+              </div>
             </Button>
           ))}
         </div>
@@ -239,15 +291,53 @@ export function RAGPanel({ ragPresets, isVisible, onClose }: RAGPanelProps) {
         {results.map((result) => (
           <Card
             key={result.id}
-            className={`mb-4 ${!result.hasValidCitations ? 'border-orange-200 bg-orange-50' : ''}`}
+            className={`mb-4 ${
+              result.isError
+                ? 'border-red-200 bg-red-50'
+                : result.isTemplate
+                  ? 'border-blue-200 bg-blue-50'
+                  : !result.hasValidCitations
+                    ? 'border-orange-200 bg-orange-50'
+                    : ''
+            }`}
           >
             <CardContent className="p-4">
+              {/* エラー警告 */}
+              {result.isError && (
+                <div className="flex items-center gap-2 mb-3 p-2 bg-red-100 rounded border border-red-200">
+                  <AlertTriangle className="h-4 w-4 text-red-600" />
+                  <span className="text-xs text-red-800 font-medium">
+                    システムエラー
+                  </span>
+                </div>
+              )}
+
+              {/* テンプレート通知 */}
+              {result.isTemplate && (
+                <div className="flex items-center gap-2 mb-3 p-2 bg-blue-100 rounded border border-blue-200">
+                  <BookOpen className="h-4 w-4 text-blue-600" />
+                  <span className="text-xs text-blue-800 font-medium">
+                    検索結果なし：テンプレート表示
+                  </span>
+                </div>
+              )}
+
               {/* 引用必須警告 */}
-              {citationsRequired && !result.hasValidCitations && (
+              {result.citationWarning && (
                 <div className="flex items-center gap-2 mb-3 p-2 bg-orange-100 rounded border border-orange-200">
                   <AlertTriangle className="h-4 w-4 text-orange-600" />
                   <span className="text-xs text-orange-800 font-medium">
-                    引用元が確認できない情報です
+                    {result.citationWarning}
+                  </span>
+                </div>
+              )}
+
+              {/* マスク適用通知 */}
+              {result.redactionsApplied && (
+                <div className="flex items-center gap-2 mb-3 p-2 bg-purple-100 rounded border border-purple-200">
+                  <Shield className="h-4 w-4 text-purple-600" />
+                  <span className="text-xs text-purple-800 font-medium">
+                    権限により一部情報がマスクされています
                   </span>
                 </div>
               )}
@@ -255,6 +345,26 @@ export function RAGPanel({ ragPresets, isVisible, onClose }: RAGPanelProps) {
               <p className="text-sm whitespace-pre-wrap mb-4">
                 {result.content}
               </p>
+
+              {/* テンプレート一覧表示 */}
+              {result.templates && result.templates.length > 0 && (
+                <div className="mb-4 p-3 bg-blue-50 rounded border border-blue-200">
+                  <p className="text-xs font-medium text-blue-800 mb-2">
+                    よく使われるテンプレート
+                  </p>
+                  <div className="grid grid-cols-1 gap-2">
+                    {result.templates.map((template, index) => (
+                      <button
+                        key={index}
+                        onClick={() => executeRAG(template)}
+                        className="text-xs text-left p-2 bg-white rounded border hover:bg-blue-100 transition-colors"
+                      >
+                        📄 {template}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* 引用元表示（必須） */}
               {result.citations.length > 0 ? (
