@@ -1,9 +1,7 @@
 {
   "framework": "nextjs",
-  "regions": ["hnd1"],
-  "env": {
-    "NEXT_PUBLIC_CUSTOMER_SERVICE_URL": "http://localhost:3001",
-    "NEXT_PUBLIC_ESTIMATE_SERVICE_URL": "http://localhost:3003",
-    "DATABASE_URL": "file:./prisma/dev.db"
-  }
+  "buildCommand": "npm install && npm run build",
+  "devCommand": "npm run dev",
+  "installCommand": "npm install",
+  "regions": ["hnd1"]
 }

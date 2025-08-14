@@ -1,410 +1,493 @@
-'use client';
+'use client'
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { useCampaigns } from '@/hooks/useCampaigns';
-import { CampaignStatus, CampaignType } from '@/types/campaign';
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import { useCampaigns } from '@/hooks/useCampaigns'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Progress } from '@/components/ui/progress'
 
 export default function CampaignsPage() {
-  const router = useRouter();
-  const [selectedStatus, setSelectedStatus] = useState<CampaignStatus | 'all'>(
-    'all',
-  );
-  const [selectedType, setSelectedType] = useState<CampaignType | 'all'>('all');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [showAnalytics, setShowAnalytics] = useState(false);
+  const router = useRouter()
+  const { campaigns, loading, error, fetchCampaigns, updateCampaign } = useCampaigns()
+  
+  const [searchTerm, setSearchTerm] = useState('')
+  const [filterStatus, setFilterStatus] = useState('all')
+  const [filterType, setFilterType] = useState('all')
+  const [sortBy, setSortBy] = useState('recent')
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
 
-  const { campaigns, loading, total } = useCampaigns({
-    filter: {
-      status: selectedStatus !== 'all' ? [selectedStatus] : undefined,
-      type: selectedType !== 'all' ? [selectedType] : undefined,
-      search: searchTerm,
-    },
-    autoFetch: true,
-  });
+  useEffect(() => {
+    const userRole = localStorage.getItem('userRole')
+    if (!userRole) {
+      router.push('/login')
+    }
+  }, [router])
 
-  const getStatusBadge = (status: CampaignStatus) => {
-    const config = {
-      draft: { label: '下書き', class: 'bg-gray-100 text-gray-700' },
-      scheduled: { label: '予約済み', class: 'bg-blue-100 text-blue-700' },
-      active: { label: '実施中', class: 'bg-green-100 text-green-700' },
-      paused: { label: '一時停止', class: 'bg-yellow-100 text-yellow-700' },
-      completed: { label: '完了', class: 'bg-gray-100 text-gray-700' },
-      cancelled: { label: 'キャンセル', class: 'bg-red-100 text-red-700' },
-    };
-    const cfg = config[status];
-    return (
-      <span
-        className={`px-2 py-1 rounded-full text-xs font-medium ${cfg.class}`}
-      >
-        {cfg.label}
-      </span>
-    );
-  };
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'draft': return 'bg-gray-100 text-gray-800'
+      case 'active': return 'bg-green-100 text-green-800'
+      case 'paused': return 'bg-yellow-100 text-yellow-800'
+      case 'completed': return 'bg-blue-100 text-blue-800'
+      case 'cancelled': return 'bg-red-100 text-red-800'
+      default: return 'bg-gray-100 text-gray-800'
+    }
+  }
 
-  const getTypeIcon = (type: CampaignType) => {
-    const icons = {
-      email: '📧',
-      sms: '💬',
-      line: '📱',
-      dm: '📮',
-      web: '🌐',
-      event: '🎪',
-      other: '📌',
-    };
-    return icons[type] || '📌';
-  };
+  const getTypeIcon = (type: string) => {
+    switch (type) {
+      case 'web': return '🌐'
+      case 'social': return '📱'
+      case 'email': return '📧'
+      case 'print': return '📰'
+      case 'event': return '🎪'
+      case 'radio': return '📻'
+      case 'tv': return '📺'
+      default: return '📢'
+    }
+  }
 
-  const getSegmentLabel = (segment: string) => {
-    const labels: Record<string, string> = {
-      all: '全顧客',
-      new: '新規顧客',
-      existing: '既存顧客',
-      dormant: '休眠顧客',
-      vip: 'VIP顧客',
-      custom: 'カスタム',
-    };
-    return labels[segment] || segment;
-  };
+  const getTypeText = (type: string) => {
+    switch (type) {
+      case 'web': return 'Web広告'
+      case 'social': return 'SNS'
+      case 'email': return 'メール'
+      case 'print': return '印刷物'
+      case 'event': return 'イベント'
+      case 'radio': return 'ラジオ'
+      case 'tv': return 'TV'
+      default: return type
+    }
+  }
 
-  // 建築業界特有のKPI計算
-  const calculateConstructionKPIs = (campaign: any) => {
-    const conversionRate =
-      campaign.metrics.clicked > 0
-        ? (
-            (campaign.metrics.converted / campaign.metrics.clicked) *
-            100
-          ).toFixed(1)
-        : '0';
+  const calculateROI = (revenue: number, cost: number) => {
+    if (cost === 0) return 0
+    return ((revenue - cost) / cost) * 100
+  }
 
-    const averageContractValue =
-      campaign.metrics.converted > 0
-        ? Math.round(campaign.metrics.revenue / campaign.metrics.converted)
-        : 0;
+  const calculateCPA = (cost: number, conversions: number) => {
+    if (conversions === 0) return 0
+    return cost / conversions
+  }
 
-    const costPerAcquisition =
-      campaign.metrics.converted > 0
-        ? Math.round(campaign.actualCost / campaign.metrics.converted)
-        : 0;
+  const filteredCampaigns = campaigns
+    .filter(campaign => {
+      if (searchTerm && !campaign.name.toLowerCase().includes(searchTerm.toLowerCase())) return false
+      if (filterStatus !== 'all' && campaign.status !== filterStatus) return false
+      if (filterType !== 'all' && campaign.type !== filterType) return false
+      return true
+    })
+    .sort((a, b) => {
+      switch (sortBy) {
+        case 'recent': return new Date(b.startDate).getTime() - new Date(a.startDate).getTime()
+        case 'budget': return b.budget - a.budget
+        case 'roi': return calculateROI(b.metrics.revenue, b.budget) - calculateROI(a.metrics.revenue, a.budget)
+        case 'cpa': return calculateCPA(a.budget, a.metrics.conversions) - calculateCPA(b.budget, b.metrics.conversions)
+        default: return 0
+      }
+    })
 
-    return {
-      conversionRate,
-      averageContractValue,
-      costPerAcquisition,
-    };
-  };
+  const totalBudget = campaigns.reduce((sum, c) => sum + c.budget, 0)
+  const totalSpent = campaigns.reduce((sum, c) => sum + c.spent, 0)
+  const totalRevenue = campaigns.reduce((sum, c) => sum + c.metrics.revenue, 0)
+  const totalConversions = campaigns.reduce((sum, c) => sum + c.metrics.conversions, 0)
+  const averageROI = calculateROI(totalRevenue, totalSpent)
 
   return (
     <div className="min-h-screen bg-gray-50">
       {/* ヘッダー */}
-      <div className="bg-gradient-to-r from-indigo-600 to-blue-500 text-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <button
-            onClick={() => router.push('/dashboard')}
-            className="text-white/80 hover:text-white mb-2 flex items-center"
-          >
-            ← ダッシュボードに戻る
-          </button>
-          <div className="flex justify-between items-center">
-            <div>
-              <h1 className="text-3xl font-bold">キャンペーン管理</h1>
-              <p className="text-indigo-100 mt-1">
-                建築・リフォーム業界向けマーケティング施策
-              </p>
+      <header className="bg-white shadow-sm border-b">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center py-4">
+            <div className="flex items-center space-x-4">
+              <button onClick={() => router.push('/dashboard')} className="text-gray-500 hover:text-gray-700">
+                ← ダッシュボード
+              </button>
+              <h1 className="text-2xl font-bold text-gray-900">マーケティングキャンペーン</h1>
             </div>
-            <div className="flex space-x-3">
+            <div className="flex space-x-2">
               <button
-                onClick={() => setShowAnalytics(!showAnalytics)}
-                className="bg-white/20 hover:bg-white/30 px-4 py-2 rounded-lg transition"
+                onClick={() => router.push('/campaigns/analytics')}
+                className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition"
               >
-                📊 分析ビュー
+                📊 分析
               </button>
               <button
                 onClick={() => router.push('/campaigns/new')}
-                className="bg-white text-indigo-600 px-6 py-2 rounded-lg font-medium hover:bg-indigo-50 transition"
+                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition"
               >
-                ＋ 新規キャンペーン
+                + 新規キャンペーン
               </button>
             </div>
           </div>
         </div>
-      </div>
+      </header>
 
-      {/* 業界特化のクイック統計 */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-8">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="bg-white rounded-lg shadow-lg p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">今月の見込み獲得</p>
-                <p className="text-2xl font-bold text-gray-900">127件</p>
-                <p className="text-xs text-green-600 mt-1">前月比 +23%</p>
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* KPIカード */}
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-8">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium text-gray-600">総予算</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">¥{totalBudget.toLocaleString()}</div>
+              <p className="text-xs text-gray-500 mt-1">
+                使用済: ¥{totalSpent.toLocaleString()}
+              </p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium text-gray-600">総売上</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-green-600">
+                ¥{totalRevenue.toLocaleString()}
               </div>
-              <span className="text-3xl">🎯</span>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-lg shadow-lg p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">平均成約単価</p>
-                <p className="text-2xl font-bold text-gray-900">¥2.8M</p>
-                <p className="text-xs text-gray-500 mt-1">外壁・屋根工事</p>
+              <p className="text-xs text-gray-500 mt-1">広告経由</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium text-gray-600">総コンバージョン</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-purple-600">{totalConversions}</div>
+              <p className="text-xs text-gray-500 mt-1">成約件数</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium text-gray-600">平均ROI</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className={`text-2xl font-bold ${averageROI >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                {averageROI.toFixed(1)}%
               </div>
-              <span className="text-3xl">💰</span>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-lg shadow-lg p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">見積り転換率</p>
-                <p className="text-2xl font-bold text-gray-900">18.5%</p>
-                <p className="text-xs text-blue-600 mt-1">業界平均: 15%</p>
+              <p className="text-xs text-gray-500 mt-1">投資収益率</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium text-gray-600">平均CPA</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-xl font-bold">
+                ¥{calculateCPA(totalSpent, totalConversions).toLocaleString()}
               </div>
-              <span className="text-3xl">📈</span>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-lg shadow-lg p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">施工待ち案件</p>
-                <p className="text-2xl font-bold text-gray-900">43件</p>
-                <p className="text-xs text-orange-600 mt-1">平均待機: 2.3週</p>
-              </div>
-              <span className="text-3xl">⏰</span>
-            </div>
-          </div>
+              <p className="text-xs text-gray-500 mt-1">獲得単価</p>
+            </CardContent>
+          </Card>
         </div>
-      </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        {/* フィルター */}
-        <div className="bg-white rounded-lg shadow mb-6 p-4">
+        {/* フィルターバー */}
+        <div className="bg-white rounded-lg shadow-sm p-4 mb-6">
           <div className="flex flex-wrap gap-4 items-center">
             <div className="flex-1 min-w-[200px]">
               <input
                 type="text"
-                placeholder="🔍 キャンペーン名、工事種別で検索..."
+                placeholder="キャンペーン名で検索..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
-
             <select
-              value={selectedStatus}
-              onChange={(e) =>
-                setSelectedStatus(e.target.value as CampaignStatus | 'all')
-              }
-              className="px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+              className="px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
-              <option value="all">全ステータス</option>
+              <option value="all">すべてのステータス</option>
               <option value="draft">下書き</option>
-              <option value="scheduled">予約済み</option>
-              <option value="active">実施中</option>
+              <option value="active">実行中</option>
               <option value="paused">一時停止</option>
               <option value="completed">完了</option>
+              <option value="cancelled">キャンセル</option>
             </select>
-
             <select
-              value={selectedType}
-              onChange={(e) =>
-                setSelectedType(e.target.value as CampaignType | 'all')
-              }
-              className="px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              value={filterType}
+              onChange={(e) => setFilterType(e.target.value)}
+              className="px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
-              <option value="all">全種別</option>
-              <option value="email">メール</option>
-              <option value="sms">SMS</option>
-              <option value="line">LINE</option>
-              <option value="dm">DM郵送</option>
+              <option value="all">すべてのタイプ</option>
               <option value="web">Web広告</option>
+              <option value="social">SNS</option>
+              <option value="email">メール</option>
+              <option value="print">印刷物</option>
               <option value="event">イベント</option>
+              <option value="radio">ラジオ</option>
+              <option value="tv">TV</option>
             </select>
-
-            <button className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition">
-              🏗️ 工事種別
-            </button>
-            <button className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition">
-              📍 エリア
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+              className="px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="recent">開始日順</option>
+              <option value="budget">予算順</option>
+              <option value="roi">ROI順</option>
+              <option value="cpa">CPA順</option>
+            </select>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setViewMode('grid')}
+                className={`px-3 py-2 rounded-lg ${viewMode === 'grid' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}
+              >
+                🔲 カード
+              </button>
+              <button
+                onClick={() => setViewMode('list')}
+                className={`px-3 py-2 rounded-lg ${viewMode === 'list' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}
+              >
+                📋 リスト
+              </button>
+            </div>
+            <button
+              onClick={fetchCampaigns}
+              className="px-4 py-2 bg-gray-100 rounded-lg hover:bg-gray-200"
+            >
+              🔄 更新
             </button>
           </div>
         </div>
 
-        {/* キャンペーンリスト */}
-        <div className="space-y-4">
-          {loading ? (
-            <div className="text-center py-12">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
-            </div>
-          ) : campaigns.length === 0 ? (
-            <div className="bg-white rounded-lg shadow p-12 text-center">
-              <span className="text-6xl">📭</span>
-              <p className="mt-4 text-gray-600">キャンペーンが見つかりません</p>
-              <button
-                onClick={() => router.push('/campaigns/new')}
-                className="mt-4 bg-indigo-600 text-white px-6 py-2 rounded-lg hover:bg-indigo-700 transition"
-              >
-                最初のキャンペーンを作成
-              </button>
-            </div>
-          ) : (
-            campaigns.map((campaign) => {
-              const kpis = calculateConstructionKPIs(campaign);
-              return (
-                <div
-                  key={campaign.id}
-                  className="bg-white rounded-lg shadow hover:shadow-lg transition-shadow cursor-pointer"
-                  onClick={() => router.push(`/campaigns/${campaign.id}`)}
-                >
-                  <div className="p-6">
-                    <div className="flex justify-between items-start mb-4">
-                      <div className="flex items-start space-x-4">
-                        <span className="text-3xl">
-                          {getTypeIcon(campaign.type)}
-                        </span>
-                        <div>
-                          <h3 className="text-lg font-semibold text-gray-900">
-                            {campaign.name}
-                          </h3>
-                          <p className="text-sm text-gray-600 mt-1">
-                            {campaign.description}
-                          </p>
-                          <div className="flex items-center space-x-4 mt-2">
-                            {getStatusBadge(campaign.status)}
-                            <span className="text-sm text-gray-500">
-                              {getSegmentLabel(campaign.targetSegment)} •{' '}
-                              {campaign.targetCount}件
-                            </span>
-                            <span className="text-sm text-gray-500">
-                              期間:{' '}
-                              {new Date(campaign.startDate).toLocaleDateString(
-                                'ja-JP',
-                              )}{' '}
-                              〜{' '}
-                              {new Date(campaign.endDate).toLocaleDateString(
-                                'ja-JP',
-                              )}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="text-right">
-                        <p className="text-sm text-gray-500">予算消化率</p>
-                        <p className="text-xl font-bold text-gray-900">
-                          {campaign.budget > 0
-                            ? Math.round(
-                                (campaign.actualCost / campaign.budget) * 100,
-                              )
-                            : 0}
-                          %
-                        </p>
-                        <p className="text-sm text-gray-600">
-                          ¥{(campaign.actualCost / 1000).toFixed(0)}k / ¥
-                          {(campaign.budget / 1000).toFixed(0)}k
-                        </p>
-                      </div>
+        {/* キャンペーン表示 */}
+        {loading ? (
+          <div className="text-center py-12">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+            <p className="mt-4 text-gray-600">読み込み中...</p>
+          </div>
+        ) : error ? (
+          <div className="text-center py-12">
+            <p className="text-red-600">{error}</p>
+          </div>
+        ) : filteredCampaigns.length === 0 ? (
+          <div className="text-center py-12 bg-white rounded-lg">
+            <p className="text-gray-500">キャンペーンが見つかりません</p>
+          </div>
+        ) : viewMode === 'grid' ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredCampaigns.map((campaign) => (
+              <Card key={campaign.id} className="hover:shadow-lg transition cursor-pointer">
+                <CardHeader>
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <h3 className="font-semibold text-lg">{campaign.name}</h3>
+                      <p className="text-sm text-gray-600">{campaign.description}</p>
                     </div>
-
-                    {/* 建築業界向けKPI */}
-                    <div className="grid grid-cols-6 gap-4 pt-4 border-t">
-                      <div>
-                        <p className="text-xs text-gray-500">配信数</p>
-                        <p className="text-lg font-semibold">
-                          {campaign.metrics.sent}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-gray-500">開封率</p>
-                        <p className="text-lg font-semibold">
-                          {campaign.metrics.sent > 0
-                            ? Math.round(
-                                (campaign.metrics.opened /
-                                  campaign.metrics.sent) *
-                                  100,
-                              )
-                            : 0}
-                          %
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-gray-500">クリック率</p>
-                        <p className="text-lg font-semibold">
-                          {campaign.metrics.opened > 0
-                            ? Math.round(
-                                (campaign.metrics.clicked /
-                                  campaign.metrics.opened) *
-                                  100,
-                              )
-                            : 0}
-                          %
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-gray-500">見積依頼</p>
-                        <p className="text-lg font-semibold text-blue-600">
-                          {campaign.metrics.converted}件
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-gray-500">平均単価</p>
-                        <p className="text-lg font-semibold text-green-600">
-                          ¥{(kpis.averageContractValue / 1000000).toFixed(1)}M
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-gray-500">ROI</p>
-                        <p className="text-lg font-semibold text-purple-600">
-                          {campaign.metrics.roi}%
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* 工事種別タグ */}
-                    <div className="flex flex-wrap gap-2 mt-4">
-                      <span className="px-2 py-1 bg-orange-100 text-orange-700 text-xs rounded">
-                        外壁塗装
-                      </span>
-                      <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded">
-                        屋根工事
-                      </span>
-                      <span className="px-2 py-1 bg-green-100 text-green-700 text-xs rounded">
-                        リフォーム
-                      </span>
+                    <div className="flex items-center space-x-2">
+                      <span className="text-xl">{getTypeIcon(campaign.type)}</span>
+                      <Badge className={getStatusColor(campaign.status)}>
+                        {campaign.status === 'active' ? '実行中' : 
+                         campaign.status === 'paused' ? '一時停止' :
+                         campaign.status === 'completed' ? '完了' :
+                         campaign.status === 'cancelled' ? 'キャンセル' : '下書き'}
+                      </Badge>
                     </div>
                   </div>
-                </div>
-              );
-            })
-          )}
-        </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {/* 期間 */}
+                  <div className="text-sm text-gray-600">
+                    📅 {new Date(campaign.startDate).toLocaleDateString('ja-JP')} 〜 
+                    {new Date(campaign.endDate).toLocaleDateString('ja-JP')}
+                  </div>
 
-        {/* ページネーション */}
-        {total > 10 && (
-          <div className="flex justify-center mt-8">
-            <div className="flex space-x-2">
-              <button className="px-4 py-2 border rounded-lg hover:bg-gray-50">
-                前へ
-              </button>
-              <button className="px-4 py-2 bg-indigo-600 text-white rounded-lg">
-                1
-              </button>
-              <button className="px-4 py-2 border rounded-lg hover:bg-gray-50">
-                2
-              </button>
-              <button className="px-4 py-2 border rounded-lg hover:bg-gray-50">
-                3
-              </button>
-              <button className="px-4 py-2 border rounded-lg hover:bg-gray-50">
-                次へ
-              </button>
-            </div>
+                  {/* 予算と使用額 */}
+                  <div>
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="text-sm text-gray-600">予算使用率</span>
+                      <span className="text-sm font-medium">
+                        {campaign.budget > 0 ? Math.round((campaign.spent / campaign.budget) * 100) : 0}%
+                      </span>
+                    </div>
+                    <Progress value={campaign.budget > 0 ? (campaign.spent / campaign.budget) * 100 : 0} className="h-2" />
+                    <div className="flex justify-between text-xs text-gray-500 mt-1">
+                      <span>¥{campaign.spent.toLocaleString()}</span>
+                      <span>¥{campaign.budget.toLocaleString()}</span>
+                    </div>
+                  </div>
+
+                  {/* メトリクス */}
+                  <div className="grid grid-cols-2 gap-4 text-center">
+                    <div>
+                      <div className="text-lg font-bold text-green-600">
+                        {campaign.metrics.conversions}
+                      </div>
+                      <div className="text-xs text-gray-500">コンバージョン</div>
+                    </div>
+                    <div>
+                      <div className="text-lg font-bold text-blue-600">
+                        {campaign.metrics.clicks.toLocaleString()}
+                      </div>
+                      <div className="text-xs text-gray-500">クリック</div>
+                    </div>
+                    <div>
+                      <div className={`text-lg font-bold ${calculateROI(campaign.metrics.revenue, campaign.spent) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        {calculateROI(campaign.metrics.revenue, campaign.spent).toFixed(1)}%
+                      </div>
+                      <div className="text-xs text-gray-500">ROI</div>
+                    </div>
+                    <div>
+                      <div className="text-lg font-bold text-purple-600">
+                        ¥{calculateCPA(campaign.spent, campaign.metrics.conversions).toLocaleString()}
+                      </div>
+                      <div className="text-xs text-gray-500">CPA</div>
+                    </div>
+                  </div>
+
+                  {/* プラットフォーム */}
+                  <div className="flex flex-wrap gap-1">
+                    {campaign.platforms.map((platform, index) => (
+                      <span key={index} className="px-2 py-1 bg-gray-100 text-xs rounded">
+                        {platform}
+                      </span>
+                    ))}
+                  </div>
+
+                  {/* アクション */}
+                  <div className="flex justify-between pt-3 border-t">
+                    <button
+                      onClick={() => router.push(`/campaigns/${campaign.id}`)}
+                      className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                    >
+                      詳細を見る →
+                    </button>
+                    {campaign.status === 'active' && (
+                      <button
+                        onClick={() => updateCampaign(campaign.id, { status: 'paused' })}
+                        className="text-yellow-600 hover:text-yellow-800 text-sm font-medium"
+                      >
+                        一時停止
+                      </button>
+                    )}
+                    {campaign.status === 'paused' && (
+                      <button
+                        onClick={() => updateCampaign(campaign.id, { status: 'active' })}
+                        className="text-green-600 hover:text-green-800 text-sm font-medium"
+                      >
+                        再開
+                      </button>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        ) : (
+          <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    キャンペーン
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    タイプ
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    期間
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    予算
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    コンバージョン
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    ROI
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    CPA
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    ステータス
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    操作
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {filteredCampaigns.map((campaign) => (
+                  <tr key={campaign.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4">
+                      <div>
+                        <div className="text-sm font-medium text-gray-900">{campaign.name}</div>
+                        <div className="text-xs text-gray-500">{campaign.description}</div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center">
+                        <span className="text-xl mr-2">{getTypeIcon(campaign.type)}</span>
+                        <span className="text-sm text-gray-600">{getTypeText(campaign.type)}</span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      <div>{new Date(campaign.startDate).toLocaleDateString('ja-JP')}</div>
+                      <div className="text-xs text-gray-500">
+                        〜 {new Date(campaign.endDate).toLocaleDateString('ja-JP')}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-900">¥{campaign.budget.toLocaleString()}</div>
+                      <div className="text-xs text-gray-500">
+                        使用: ¥{campaign.spent.toLocaleString()}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-lg font-bold text-green-600">
+                        {campaign.metrics.conversions}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        CTR: {campaign.metrics.impressions > 0 ? 
+                          ((campaign.metrics.clicks / campaign.metrics.impressions) * 100).toFixed(2) : 0}%
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className={`text-lg font-bold ${
+                        calculateROI(campaign.metrics.revenue, campaign.spent) >= 0 ? 'text-green-600' : 'text-red-600'
+                      }`}>
+                        {calculateROI(campaign.metrics.revenue, campaign.spent).toFixed(1)}%
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      ¥{calculateCPA(campaign.spent, campaign.metrics.conversions).toLocaleString()}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <Badge className={getStatusColor(campaign.status)}>
+                        {campaign.status === 'active' ? '実行中' : 
+                         campaign.status === 'paused' ? '一時停止' :
+                         campaign.status === 'completed' ? '完了' :
+                         campaign.status === 'cancelled' ? 'キャンセル' : '下書き'}
+                      </Badge>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={() => router.push(`/campaigns/${campaign.id}`)}
+                          className="text-blue-600 hover:text-blue-900"
+                        >
+                          詳細
+                        </button>
+                        <button
+                          onClick={() => router.push(`/campaigns/${campaign.id}/edit`)}
+                          className="text-green-600 hover:text-green-900"
+                        >
+                          編集
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
-      </div>
+      </main>
     </div>
-  );
+  )
 }

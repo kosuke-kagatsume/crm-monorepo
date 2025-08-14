@@ -1,0 +1,226 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { DashboardWidget } from '@/components/dashboard/DashboardWidget';
+import { RAGPanel } from '@/components/dashboard/RAGPanel';
+import { useRagToggle } from '@/components/rag/useRagToggle';
+import { roleConfig, roleMapping, roleDisplayNames, roleShortcuts, Role } from '@/config/roleDashboard';
+import { Sparkles, Settings, ArrowLeft } from 'lucide-react';
+
+export default function HomePage() {
+  const router = useRouter();
+  const [mounted, setMounted] = useState(false);
+  const [userRole, setUserRole] = useState<Role | null>(null);
+  const [userName, setUserName] = useState<string>('');
+  const rag = useRagToggle(); // RAGトグルフック使用
+
+  useEffect(() => {
+    setMounted(true);
+    
+    // ローカルストレージから役職とユーザー名を取得
+    const roleFromStorage = localStorage.getItem('userRole') || '';
+    const name = localStorage.getItem('userName') || '';
+    
+    if (!roleFromStorage) {
+      router.push('/login');
+      return;
+    }
+
+    // 役職名をRoleタイプにマッピング
+    const mappedRole = roleMapping[roleFromStorage];
+    if (!mappedRole) {
+      console.error(`Unknown role: ${roleFromStorage}`);
+      router.push('/login');
+      return;
+    }
+
+    setUserRole(mappedRole);
+    setUserName(name);
+  }, [router]);
+
+  // ショートカットキー処理
+  useEffect(() => {
+    if (!userRole) return;
+
+    const shortcuts = roleShortcuts[userRole];
+
+    const handleKeyPress = (e: KeyboardEvent) => {
+      // 入力フィールド内では無効
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+      const key = e.key.toUpperCase();
+      
+      if (shortcuts.includes(key)) {
+        switch (key) {
+          case 'R': // RAG表示切り替え
+            rag.toggle();
+            break;
+          case 'E': // 出来高入力（施工管理のみ）
+            handleShortcutAction('progress-input');
+            break;
+          case 'C': // 変更工事起票（施工管理のみ）
+            handleShortcutAction('change-order');
+            break;
+          case 'B': // 請求案作成（施工管理のみ）
+            handleShortcutAction('billing');
+            break;
+          case 'N': // 新規顧客（事務員のみ）
+            handleShortcutAction('new-customer');
+            break;
+          case 'M': // 見積統合（アフター担当のみ）
+            handleShortcutAction('merge-estimate');
+            break;
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyPress);
+    return () => window.removeEventListener('keydown', handleKeyPress);
+  }, [userRole, rag]);
+
+  const handleShortcutAction = (action: string) => {
+    // ショートカットアクション処理（ダミー実装）
+    switch (action) {
+      case 'progress-input':
+        alert('出来高入力画面を開きます (E)');
+        break;
+      case 'change-order':
+        alert('変更工事起票画面を開きます (C)');
+        break;
+      case 'billing':
+        alert('請求案作成画面を開きます (B)');
+        break;
+      case 'new-customer':
+        router.push('/customers/new');
+        break;
+      case 'merge-estimate':
+        alert('見積統合機能は準備中です (M)');
+        break;
+    }
+  };
+
+  const handleWidgetAction = (action: string, data?: any) => {
+    console.log('Widget action:', action, data);
+    
+    switch (action) {
+      case 'todo-click':
+        alert(`ToDo「${data.title}」をクリックしました`);
+        break;
+      case 'list-click':
+        alert(`リスト項目「${data}」をクリックしました`);
+        break;
+      case 'event-click':
+        alert(`イベント「${data.title}」をクリックしました`);
+        break;
+      case 'shortcut':
+        handleShortcutAction(
+          data.key === 'E' ? 'progress-input' :
+          data.key === 'C' ? 'change-order' :
+          data.key === 'B' ? 'billing' :
+          data.key === 'N' ? 'new-customer' :
+          data.key === 'M' ? 'merge-estimate' : ''
+        );
+        break;
+      case 'toggle-rag':
+        rag.toggle();
+        break;
+    }
+  };
+
+  if (!mounted || !userRole) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-gray-50">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
+  const currentConfig = roleConfig[userRole];
+  const ragPresets = ['進捗確認', '予算状況', '安全基準', '品質管理']; // 簡易実装
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      {/* ヘッダー */}
+      <header className="bg-white shadow-sm border-b">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center py-4">
+            <div className="flex items-center space-x-4">
+              <Button
+                variant="ghost"
+                onClick={() => router.push('/dashboard')}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <ArrowLeft className="h-4 w-4 mr-1" />
+                ダッシュボード
+              </Button>
+              <h1 className="text-2xl font-bold text-gray-900">
+                ホーム
+              </h1>
+              <Badge variant="outline">{roleDisplayNames[userRole]}</Badge>
+            </div>
+            
+            <div className="flex items-center space-x-4">
+              <div className="text-sm text-gray-500">
+                ショートカット: {roleShortcuts[userRole].join(', ')}
+              </div>
+              <Button
+                variant={rag.open ? "default" : "outline"}
+                onClick={rag.toggle}
+                className="flex items-center space-x-1"
+              >
+                <Sparkles className="h-4 w-4" />
+                <span>RAG</span>
+              </Button>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <div className="flex">
+        {/* メインコンテンツ */}
+        <main className={`flex-1 p-6 transition-all duration-300 ${rag.open ? 'mr-96' : ''}`}>
+          <div className="max-w-7xl mx-auto">
+            {/* ウェルカムセクション */}
+            <div className="mb-6">
+              <h2 className="text-lg font-semibold text-gray-900 mb-2">
+                おかえりなさい、{userName}さん
+              </h2>
+              <p className="text-gray-600">
+                今日も一日お疲れ様です。ダッシュボードから最新の情報をご確認ください。
+              </p>
+            </div>
+
+            {/* ダッシュボードウィジェット */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+              {currentConfig.widgets.map((widgetId, index) => (
+                <DashboardWidget
+                  key={`${widgetId}-${index}`}
+                  widgetId={widgetId}
+                  onAction={handleWidgetAction}
+                />
+              ))}
+            </div>
+
+            {/* フッター情報 */}
+            <div className="mt-12 text-center">
+              <p className="text-sm text-gray-500">
+                最終ログイン: {new Date().toLocaleString('ja-JP')}
+              </p>
+            </div>
+          </div>
+        </main>
+
+        {/* RAGパネル */}
+        <RAGPanel
+          ragPresets={ragPresets}
+          isVisible={rag.open}
+          onClose={() => rag.setOpen(false)}
+        />
+      </div>
+    </div>
+  );
+}

@@ -1,5 +1,5 @@
 import './global.css';
-import { Providers } from '@/components/Providers';
+// import { Providers } from '@/components/Providers';
 
 export const metadata = {
   title: 'DRM Suite - Dandori Relation Management',
@@ -14,7 +14,7 @@ export default function RootLayout({
   return (
     <html lang="ja">
       <body>
-        <Providers>{children}</Providers>
+        {children}
       </body>
     </html>
   );

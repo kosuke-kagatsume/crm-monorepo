@@ -1,332 +1,396 @@
-'use client';
+'use client'
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { useAuth } from '@/contexts/AuthContext';
-import {
-  expenseService,
-  type Expense,
-  type ExpenseCategory,
-  type CreateExpenseDto,
-} from '@/services/expense.service';
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import { useExpenses } from '@/hooks/useExpenses'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 
 export default function ExpensesPage() {
-  const router = useRouter();
-  const { user, isLoading } = useAuth();
-  const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [categories, setCategories] = useState<ExpenseCategory[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [totalExpenses, setTotalExpenses] = useState(0);
-  const [filter, setFilter] = useState({
-    companyId: 'default-company',
-    userId: user?.id || '',
-    limit: 20,
-    offset: 0,
-  });
+  const router = useRouter()
+  const { expenses, stats, loading, error, refetch, createExpense, updateExpenseStatus } = useExpenses({ autoFetch: true })
+  
+  const [searchTerm, setSearchTerm] = useState('')
+  const [filterCategory, setFilterCategory] = useState('all')
+  const [filterStatus, setFilterStatus] = useState('all')
+  const [dateRange, setDateRange] = useState({ start: '', end: '' })
+  const [showNewExpenseModal, setShowNewExpenseModal] = useState(false)
+  const [userRole, setUserRole] = useState('')
 
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [showApprovalModal, setShowApprovalModal] = useState(false);
-  const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
-  const [approvalAction, setApprovalAction] = useState<
-    'approve' | 'reject' | 'request_info'
-  >('approve');
-  const [approvalComment, setApprovalComment] = useState('');
-
+  // 新規経費フォーム
   const [newExpense, setNewExpense] = useState({
-    title: '',
     description: '',
-    categoryId: '',
-    amount: '',
-    expenseDate: new Date().toISOString().split('T')[0],
+    amount: 0,
+    category: 'materials' as const,
+    date: new Date().toISOString().split('T')[0],
     projectId: '',
-  });
+    notes: '',
+    receipt: false
+  })
 
   useEffect(() => {
-    if (user?.id) {
-      setFilter((prev) => ({ ...prev, userId: user.id }));
-      fetchData();
+    const role = localStorage.getItem('userRole')
+    if (!role) {
+      router.push('/login')
+      return
     }
-  }, [user]);
+    setUserRole(role)
+    
+    // 月初と月末を設定
+    const now = new Date()
+    const start = new Date(now.getFullYear(), now.getMonth(), 1)
+    const end = new Date(now.getFullYear(), now.getMonth() + 1, 0)
+    setDateRange({
+      start: start.toISOString().split('T')[0],
+      end: end.toISOString().split('T')[0]
+    })
+  }, [router])
 
-  useEffect(() => {
-    fetchExpenses();
-  }, [filter]);
-
-  const fetchData = async () => {
-    try {
-      const [expensesResponse, categoriesResponse] = await Promise.all([
-        expenseService.getExpenses(filter),
-        expenseService.getExpenseCategories(filter.companyId),
-      ]);
-
-      setExpenses(expensesResponse.items);
-      setTotalExpenses(expensesResponse.total);
-      setCategories(categoriesResponse);
-    } catch (err) {
-      setError('データの取得に失敗しました');
-      console.error(err);
-    } finally {
-      setLoading(false);
+  const getCategoryIcon = (category: string) => {
+    switch (category) {
+      case 'materials': return '🔨'
+      case 'labor': return '👷'
+      case 'equipment': return '🏗️'
+      case 'office': return '📎'
+      case 'marketing': return '📢'
+      case 'utilities': return '💡'
+      default: return '📋'
     }
-  };
-
-  const fetchExpenses = async () => {
-    try {
-      setLoading(true);
-      const response = await expenseService.getExpenses(filter);
-      setExpenses(response.items);
-      setTotalExpenses(response.total);
-    } catch (err) {
-      setError('経費データの取得に失敗しました');
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleAddExpense = async () => {
-    if (!user?.id) return;
-
-    try {
-      const createDto: CreateExpenseDto = {
-        companyId: filter.companyId,
-        userId: user.id,
-        categoryId: newExpense.categoryId,
-        title: newExpense.title,
-        description: newExpense.description,
-        amount: Number(newExpense.amount),
-        expenseDate: newExpense.expenseDate,
-        projectId: newExpense.projectId || undefined,
-      };
-
-      await expenseService.createExpense(createDto);
-      await fetchExpenses();
-      setShowAddModal(false);
-      setNewExpense({
-        title: '',
-        description: '',
-        categoryId: '',
-        amount: '',
-        expenseDate: new Date().toISOString().split('T')[0],
-        projectId: '',
-      });
-    } catch (err) {
-      alert('経費の追加に失敗しました');
-      console.error(err);
-    }
-  };
-
-  const handleSubmitExpense = async (expense: Expense) => {
-    try {
-      await expenseService.submitExpense(expense.id);
-      await fetchExpenses();
-    } catch (err) {
-      alert('経費の申請に失敗しました');
-      console.error(err);
-    }
-  };
-
-  const handleApproval = async () => {
-    if (!selectedExpense) return;
-
-    try {
-      await expenseService.approveExpense({
-        expenseId: selectedExpense.id,
-        action: approvalAction,
-        comment: approvalComment || undefined,
-      });
-      await fetchExpenses();
-      setShowApprovalModal(false);
-      setSelectedExpense(null);
-      setApprovalComment('');
-    } catch (err) {
-      alert('承認処理に失敗しました');
-      console.error(err);
-    }
-  };
-
-  const getStatusBadge = (status: string) => {
-    const statusConfig = {
-      draft: { label: '下書き', class: 'bg-gray-100 text-gray-800' },
-      submitted: { label: '申請中', class: 'bg-blue-100 text-blue-800' },
-      approved: { label: '承認済み', class: 'bg-green-100 text-green-800' },
-      rejected: { label: '却下', class: 'bg-red-100 text-red-800' },
-      paid: { label: '支払済み', class: 'bg-purple-100 text-purple-800' },
-    };
-
-    const config = statusConfig[status as keyof typeof statusConfig] || {
-      label: status,
-      class: 'bg-gray-100 text-gray-800',
-    };
-
-    return (
-      <span
-        className={`px-2 py-1 rounded-full text-xs font-medium ${config.class}`}
-      >
-        {config.label}
-      </span>
-    );
-  };
-
-  if (isLoading || !user || loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">読み込み中...</p>
-        </div>
-      </div>
-    );
   }
 
-  const totalAmount = expenses.reduce(
-    (sum, expense) => sum + Number(expense.amount),
-    0,
-  );
-  const approvedAmount = expenses
-    .filter(
-      (expense) => expense.status === 'approved' || expense.status === 'paid',
-    )
-    .reduce((sum, expense) => sum + Number(expense.amount), 0);
-  const pendingAmount = expenses
-    .filter((expense) => expense.status === 'submitted')
-    .reduce((sum, expense) => sum + Number(expense.amount), 0);
+  const getCategoryText = (category: string) => {
+    switch (category) {
+      case 'materials': return '材料費'
+      case 'labor': return '人件費'
+      case 'equipment': return '設備費'
+      case 'office': return '事務費'
+      case 'marketing': return '広告費'
+      case 'utilities': return '光熱費'
+      default: return 'その他'
+    }
+  }
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'pending': return 'bg-yellow-100 text-yellow-800'
+      case 'approved': return 'bg-green-100 text-green-800'
+      case 'rejected': return 'bg-red-100 text-red-800'
+      default: return 'bg-gray-100 text-gray-800'
+    }
+  }
+
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case 'pending': return '承認待ち'
+      case 'approved': return '承認済み'
+      case 'rejected': return '却下'
+      default: return status
+    }
+  }
+
+  const handleSubmitExpense = async () => {
+    if (!newExpense.description || newExpense.amount <= 0) {
+      alert('必須項目を入力してください')
+      return
+    }
+
+    const success = await createExpense({
+      ...newExpense,
+      submittedBy: localStorage.getItem('userEmail') || 'user@test.com'
+    })
+
+    if (success) {
+      setShowNewExpenseModal(false)
+      setNewExpense({
+        description: '',
+        amount: 0,
+        category: 'materials',
+        date: new Date().toISOString().split('T')[0],
+        projectId: '',
+        notes: '',
+        receipt: false
+      })
+      refetch()
+    }
+  }
+
+  const handleApprove = async (expenseId: string) => {
+    if (confirm('この経費を承認しますか？')) {
+      await updateExpenseStatus(expenseId, 'approved')
+      refetch()
+    }
+  }
+
+  const handleReject = async (expenseId: string) => {
+    const reason = prompt('却下理由を入力してください：')
+    if (reason) {
+      await updateExpenseStatus(expenseId, 'rejected')
+      refetch()
+    }
+  }
+
+  const filteredExpenses = expenses.filter(expense => {
+    if (searchTerm && !expense.description.toLowerCase().includes(searchTerm.toLowerCase())) return false
+    if (filterCategory !== 'all' && expense.category !== filterCategory) return false
+    if (filterStatus !== 'all' && expense.status !== filterStatus) return false
+    if (dateRange.start && new Date(expense.date) < new Date(dateRange.start)) return false
+    if (dateRange.end && new Date(expense.date) > new Date(dateRange.end)) return false
+    return true
+  })
+
+  const canApprove = userRole === '経営者' || userRole === '支店長' || userRole === '経理担当'
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <nav className="bg-white shadow-sm">
-        <div className="container mx-auto px-4 py-4 flex justify-between items-center">
-          <div className="flex items-center space-x-4">
+      {/* ヘッダー */}
+      <header className="bg-white shadow-sm border-b">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center py-4">
+            <div className="flex items-center space-x-4">
+              <button onClick={() => router.push('/dashboard')} className="text-gray-500 hover:text-gray-700">
+                ← ダッシュボード
+              </button>
+              <h1 className="text-2xl font-bold text-gray-900">経費管理</h1>
+            </div>
             <button
-              onClick={() => router.push('/dashboard')}
-              className="text-gray-600 hover:text-gray-900"
-            >
-              ← ダッシュボード
-            </button>
-            <h1 className="text-2xl font-bold text-gray-900">経費管理</h1>
-          </div>
-        </div>
-      </nav>
-
-      <div className="container mx-auto px-4 py-8">
-        {/* Statistics Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
-          <div className="bg-white p-6 rounded-lg shadow">
-            <h3 className="text-sm font-medium text-gray-500 mb-2">総経費額</h3>
-            <p className="text-3xl font-bold text-gray-900">
-              ¥{totalAmount.toLocaleString()}
-            </p>
-          </div>
-          <div className="bg-white p-6 rounded-lg shadow">
-            <h3 className="text-sm font-medium text-gray-500 mb-2">承認済み</h3>
-            <p className="text-3xl font-bold text-green-600">
-              ¥{approvedAmount.toLocaleString()}
-            </p>
-          </div>
-          <div className="bg-white p-6 rounded-lg shadow">
-            <h3 className="text-sm font-medium text-gray-500 mb-2">申請中</h3>
-            <p className="text-3xl font-bold text-blue-600">
-              ¥{pendingAmount.toLocaleString()}
-            </p>
-          </div>
-          <div className="bg-white p-6 rounded-lg shadow">
-            <h3 className="text-sm font-medium text-gray-500 mb-2">経費件数</h3>
-            <p className="text-3xl font-bold text-gray-900">
-              {expenses.length}
-            </p>
-          </div>
-        </div>
-
-        {/* Expenses Table */}
-        <div className="bg-white rounded-lg shadow p-6">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-xl font-semibold">経費一覧</h2>
-            <button
-              onClick={() => setShowAddModal(true)}
-              className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition"
+              onClick={() => setShowNewExpenseModal(true)}
+              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition"
             >
               + 経費申請
             </button>
           </div>
+        </div>
+      </header>
 
-          <div className="overflow-x-auto">
-            <table className="w-full">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* 統計カード */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium text-gray-600">今月の総経費</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">¥{stats.totalExpenses.toLocaleString()}</div>
+              <p className="text-xs text-gray-500 mt-1">前月比 +12%</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium text-gray-600">承認待ち</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-orange-600">
+                ¥{stats.pendingApproval.toLocaleString()}
+              </div>
+              <p className="text-xs text-gray-500 mt-1">
+                {expenses.filter(e => e.status === 'pending').length}件
+              </p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium text-gray-600">承認済み</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-green-600">
+                ¥{stats.approvedAmount.toLocaleString()}
+              </div>
+              <p className="text-xs text-gray-500 mt-1">
+                {expenses.filter(e => e.status === 'approved').length}件
+              </p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium text-gray-600">却下</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-red-600">
+                ¥{stats.rejectedAmount.toLocaleString()}
+              </div>
+              <p className="text-xs text-gray-500 mt-1">
+                {expenses.filter(e => e.status === 'rejected').length}件
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* カテゴリ別内訳 */}
+        <Card className="mb-8">
+          <CardHeader>
+            <CardTitle>カテゴリ別内訳</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+              {Object.entries(stats.byCategory).map(([category, amount]) => (
+                <div key={category} className="text-center">
+                  <div className="text-2xl mb-1">{getCategoryIcon(category)}</div>
+                  <div className="text-sm text-gray-600">{getCategoryText(category)}</div>
+                  <div className="font-semibold">¥{amount.toLocaleString()}</div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* フィルター */}
+        <div className="bg-white rounded-lg shadow-sm p-4 mb-6">
+          <div className="flex flex-wrap gap-4">
+            <div className="flex-1 min-w-[200px]">
+              <input
+                type="text"
+                placeholder="説明で検索..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <select
+              value={filterCategory}
+              onChange={(e) => setFilterCategory(e.target.value)}
+              className="px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="all">すべてのカテゴリ</option>
+              <option value="materials">材料費</option>
+              <option value="labor">人件費</option>
+              <option value="equipment">設備費</option>
+              <option value="office">事務費</option>
+              <option value="marketing">広告費</option>
+              <option value="utilities">光熱費</option>
+              <option value="other">その他</option>
+            </select>
+            <select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+              className="px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="all">すべてのステータス</option>
+              <option value="pending">承認待ち</option>
+              <option value="approved">承認済み</option>
+              <option value="rejected">却下</option>
+            </select>
+            <input
+              type="date"
+              value={dateRange.start}
+              onChange={(e) => setDateRange({ ...dateRange, start: e.target.value })}
+              className="px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <span className="self-center">〜</span>
+            <input
+              type="date"
+              value={dateRange.end}
+              onChange={(e) => setDateRange({ ...dateRange, end: e.target.value })}
+              className="px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <button
+              onClick={refetch}
+              className="px-4 py-2 bg-gray-100 rounded-lg hover:bg-gray-200"
+            >
+              🔄 更新
+            </button>
+          </div>
+        </div>
+
+        {/* 経費一覧 */}
+        {loading ? (
+          <div className="text-center py-12">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+            <p className="mt-4 text-gray-600">読み込み中...</p>
+          </div>
+        ) : filteredExpenses.length === 0 ? (
+          <div className="text-center py-12 bg-white rounded-lg">
+            <p className="text-gray-500">経費データが見つかりません</p>
+          </div>
+        ) : (
+          <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+            <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    タイトル
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    日付
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     カテゴリ
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    説明
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     金額
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    申請日
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    プロジェクト
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    申請者
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     ステータス
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    領収書
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     操作
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-200">
-                {expenses.map((expense) => (
+              <tbody className="bg-white divide-y divide-gray-200">
+                {filteredExpenses.map((expense) => (
                   <tr key={expense.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-4">
-                      <div>
-                        <div className="text-sm font-medium text-gray-900">
-                          {expense.title}
-                        </div>
-                        {expense.description && (
-                          <div className="text-sm text-gray-500">
-                            {expense.description}
-                          </div>
-                        )}
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {new Date(expense.date).toLocaleDateString('ja-JP')}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className="text-xl">{getCategoryIcon(expense.category)}</span>
+                      <span className="ml-2 text-sm text-gray-600">{getCategoryText(expense.category)}</span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="text-sm text-gray-900">{expense.description}</div>
+                      {expense.notes && (
+                        <div className="text-xs text-gray-500 mt-1">{expense.notes}</div>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm font-medium text-gray-900">
+                        ¥{expense.amount.toLocaleString()}
                       </div>
                     </td>
-                    <td className="px-4 py-4 text-sm text-gray-900">
-                      {expense.category?.name}
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {expense.projectId || '-'}
                     </td>
-                    <td className="px-4 py-4 text-sm font-medium text-gray-900">
-                      ¥{Number(expense.amount).toLocaleString()}
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {expense.submittedBy}
                     </td>
-                    <td className="px-4 py-4 text-sm text-gray-500">
-                      {new Date(expense.expenseDate).toLocaleDateString(
-                        'ja-JP',
-                      )}
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(expense.status)}`}>
+                        {getStatusText(expense.status)}
+                      </span>
                     </td>
-                    <td className="px-4 py-4 text-sm">
-                      {getStatusBadge(expense.status)}
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {expense.receipt ? '✅' : '❌'}
                     </td>
-                    <td className="px-4 py-4 text-sm space-x-2">
-                      {expense.status === 'draft' && (
-                        <button
-                          onClick={() => handleSubmitExpense(expense)}
-                          className="text-blue-600 hover:text-blue-900"
-                        >
-                          申請
-                        </button>
-                      )}
-                      {expense.status === 'submitted' &&
-                        user?.role === 'manager' && (
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                      {expense.status === 'pending' && canApprove && (
+                        <div className="flex space-x-2">
                           <button
-                            onClick={() => {
-                              setSelectedExpense(expense);
-                              setShowApprovalModal(true);
-                            }}
+                            onClick={() => handleApprove(expense.id)}
                             className="text-green-600 hover:text-green-900"
                           >
                             承認
                           </button>
-                        )}
+                          <button
+                            onClick={() => handleReject(expense.id)}
+                            className="text-red-600 hover:text-red-900"
+                          >
+                            却下
+                          </button>
+                        </div>
+                      )}
                       <button
                         onClick={() => router.push(`/expenses/${expense.id}`)}
-                        className="text-gray-600 hover:text-gray-900"
+                        className="text-blue-600 hover:text-blue-900"
                       >
                         詳細
                       </button>
@@ -336,27 +400,58 @@ export default function ExpensesPage() {
               </tbody>
             </table>
           </div>
-        </div>
-      </div>
+        )}
 
-      {/* Add Expense Modal */}
-      {showAddModal && (
+        {/* 月次推移グラフ */}
+        <Card className="mt-8">
+          <CardHeader>
+            <CardTitle>月次推移</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="h-64 flex items-end justify-between space-x-2">
+              {stats.monthlyTrend.map((month, index) => (
+                <div key={index} className="flex-1 flex flex-col items-center">
+                  <div className="w-full bg-blue-500 rounded-t" style={{ height: `${(month.amount / Math.max(...stats.monthlyTrend.map(m => m.amount))) * 200}px` }}></div>
+                  <div className="text-xs mt-2">{month.month}</div>
+                  <div className="text-xs font-semibold">¥{(month.amount / 1000000).toFixed(1)}M</div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </main>
+
+      {/* 新規経費モーダル */}
+      {showNewExpenseModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 w-full max-w-md">
-            <h3 className="text-lg font-semibold mb-4">経費申請</h3>
+            <h2 className="text-xl font-bold mb-4">新規経費申請</h2>
+            
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  タイトル
+                  説明 *
                 </label>
                 <input
                   type="text"
-                  value={newExpense.title}
-                  onChange={(e) =>
-                    setNewExpense({ ...newExpense, title: e.target.value })
-                  }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value={newExpense.description}
+                  onChange={(e) => setNewExpense({ ...newExpense, description: e.target.value })}
+                  className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  金額 *
+                </label>
+                <input
+                  type="number"
+                  value={newExpense.amount}
+                  onChange={(e) => setNewExpense({ ...newExpense, amount: Number(e.target.value) })}
+                  className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
+                  min="0"
                 />
               </div>
 
@@ -365,179 +460,84 @@ export default function ExpensesPage() {
                   カテゴリ
                 </label>
                 <select
-                  value={newExpense.categoryId}
-                  onChange={(e) =>
-                    setNewExpense({ ...newExpense, categoryId: e.target.value })
-                  }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
+                  value={newExpense.category}
+                  onChange={(e) => setNewExpense({ ...newExpense, category: e.target.value as any })}
+                  className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
-                  <option value="">カテゴリを選択</option>
-                  {categories.map((category) => (
-                    <option key={category.id} value={category.id}>
-                      {category.name}
-                    </option>
-                  ))}
+                  <option value="materials">材料費</option>
+                  <option value="labor">人件費</option>
+                  <option value="equipment">設備費</option>
+                  <option value="office">事務費</option>
+                  <option value="marketing">広告費</option>
+                  <option value="utilities">光熱費</option>
+                  <option value="other">その他</option>
                 </select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    金額
-                  </label>
-                  <input
-                    type="number"
-                    value={newExpense.amount}
-                    onChange={(e) =>
-                      setNewExpense({ ...newExpense, amount: e.target.value })
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    min="0"
-                    step="1"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    利用日
-                  </label>
-                  <input
-                    type="date"
-                    value={newExpense.expenseDate}
-                    onChange={(e) =>
-                      setNewExpense({
-                        ...newExpense,
-                        expenseDate: e.target.value,
-                      })
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    required
-                  />
-                </div>
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  説明
+                  日付
+                </label>
+                <input
+                  type="date"
+                  value={newExpense.date}
+                  onChange={(e) => setNewExpense({ ...newExpense, date: e.target.value })}
+                  className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  プロジェクトID
+                </label>
+                <input
+                  type="text"
+                  value={newExpense.projectId}
+                  onChange={(e) => setNewExpense({ ...newExpense, projectId: e.target.value })}
+                  className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="関連プロジェクトがある場合"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  備考
                 </label>
                 <textarea
-                  value={newExpense.description}
-                  onChange={(e) =>
-                    setNewExpense({
-                      ...newExpense,
-                      description: e.target.value,
-                    })
-                  }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value={newExpense.notes}
+                  onChange={(e) => setNewExpense({ ...newExpense, notes: e.target.value })}
+                  className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   rows={3}
                 />
               </div>
+
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={newExpense.receipt}
+                  onChange={(e) => setNewExpense({ ...newExpense, receipt: e.target.checked })}
+                  className="mr-2"
+                />
+                <label className="text-sm text-gray-700">
+                  領収書あり
+                </label>
+              </div>
             </div>
 
-            <div className="flex justify-end space-x-3 mt-6">
-              <button
-                onClick={() => setShowAddModal(false)}
-                className="px-4 py-2 text-gray-600 hover:text-gray-800"
+            <div className="flex justify-end space-x-2 mt-6">
+              <Button
+                onClick={() => setShowNewExpenseModal(false)}
+                variant="outline"
               >
                 キャンセル
-              </button>
-              <button
-                onClick={handleAddExpense}
-                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-              >
+              </Button>
+              <Button onClick={handleSubmitExpense}>
                 申請
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Approval Modal */}
-      {showApprovalModal && selectedExpense && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md">
-            <h3 className="text-lg font-semibold mb-4">
-              経費承認 - {selectedExpense.title}
-            </h3>
-
-            <div className="mb-4 p-4 bg-gray-50 rounded">
-              <p className="text-sm text-gray-600">
-                金額: ¥{Number(selectedExpense.amount).toLocaleString()}
-              </p>
-              <p className="text-sm text-gray-600">
-                カテゴリ: {selectedExpense.category?.name}
-              </p>
-              <p className="text-sm text-gray-600">
-                申請者: {selectedExpense.user?.name}
-              </p>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  アクション
-                </label>
-                <select
-                  value={approvalAction}
-                  onChange={(e) =>
-                    setApprovalAction(
-                      e.target.value as 'approve' | 'reject' | 'request_info',
-                    )
-                  }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="approve">承認</option>
-                  <option value="reject">却下</option>
-                  <option value="request_info">追加情報要求</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  コメント
-                </label>
-                <textarea
-                  value={approvalComment}
-                  onChange={(e) => setApprovalComment(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  rows={3}
-                  placeholder="承認理由やコメントを入力..."
-                />
-              </div>
-            </div>
-
-            <div className="flex justify-end space-x-3 mt-6">
-              <button
-                onClick={() => {
-                  setShowApprovalModal(false);
-                  setSelectedExpense(null);
-                  setApprovalComment('');
-                }}
-                className="px-4 py-2 text-gray-600 hover:text-gray-800"
-              >
-                キャンセル
-              </button>
-              <button
-                onClick={handleApproval}
-                className={`px-4 py-2 text-white rounded ${
-                  approvalAction === 'approve'
-                    ? 'bg-green-600 hover:bg-green-700'
-                    : approvalAction === 'reject'
-                      ? 'bg-red-600 hover:bg-red-700'
-                      : 'bg-blue-600 hover:bg-blue-700'
-                }`}
-              >
-                {approvalAction === 'approve'
-                  ? '承認'
-                  : approvalAction === 'reject'
-                    ? '却下'
-                    : '追加情報要求'}
-              </button>
+              </Button>
             </div>
           </div>
         </div>
       )}
     </div>
-  );
+  )
 }

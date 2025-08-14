@@ -133,9 +133,9 @@ export default function LoginPage() {
       localStorage.setItem('userRole', account.role);
       localStorage.setItem('userEmail', account.email);
       localStorage.setItem('userName', account.name);
-      // ダッシュボードへ遷移
+      // ホームへ遷移
       setTimeout(() => {
-        window.location.href = '/dashboard';
+        window.location.href = '/home';
       }, 500);
     }
   };
@@ -172,7 +172,7 @@ export default function LoginPage() {
                 backgroundClip: 'text',
               }}
             >
-              DRM Suite v1.0
+              DRM Suite v1.1
             </h1>
             <p className="text-gray-600">Dandori Relation Management System</p>
           </div>

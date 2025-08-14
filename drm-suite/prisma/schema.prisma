@@ -33,7 +33,20 @@ model Company {
   expenseCategories ExpenseCategory[]
   expenses          Expense[]
   budgets           Budget[]
-  paymentMethods    PaymentMethod[]
+  paymentMethods       PaymentMethod[]
+  afterCareSchedules   AfterCareSchedule[]
+  customerSatisfaction CustomerSatisfaction[]
+  warrantyRecords      WarrantyRecord[]
+  
+  // v1.0 新機能
+  projectLedgers    ProjectLedger[]
+  journalEntries    JournalEntry[]
+  accounts          Account[]
+  maintenanceContracts MaintenanceContract[]
+  claims            Claim[]
+  receptionCards    ReceptionCard[]
+  notifications     Notification[]
+  companyPlan       CompanyPlan?
 
   @@index([code])
   @@map("companies")
@@ -59,7 +72,10 @@ model Store {
   inventories Inventory[]
   bookings    Booking[]
   expenses    Expense[]
-  campaigns   Campaign[]
+  campaigns          Campaign[]
+  afterCareSchedules AfterCareSchedule[]
+  projectLedgers     ProjectLedger[]
+  receptionCards     ReceptionCard[]
 
   @@unique([companyId, code])
   @@index([companyId])
@@ -73,7 +89,7 @@ model User {
   storeId      String?
   email        String   @unique
   name         String
-  role         String   // OpenFGA role ID
+  role         String   // 施工管理, 事務, アフター, 営業, 管理者
   permissions  String     @default("[]")
   passwordHash String?
   isActive     Boolean  @default(true)
@@ -92,6 +108,14 @@ model User {
   expenses         Expense[]         @relation("ExpenseSubmitter")
   approvedExpenses Expense[]         @relation("ExpenseApprover")
   expenseApprovals ExpenseApproval[]
+  approvalWorkflows ApprovalWorkflow[]
+  receptionCards   ReceptionCard[]   @relation("ReceptionCreatedBy")
+  assignedCards    ReceptionCard[]   @relation("ReceptionAssignedTo")
+  notifications    Notification[]    @relation("NotificationCreatedBy")
+  notificationReceived Notification[] @relation("NotificationRecipient")
+  contractHistoryApprovals ContractHistory[] @relation("ContractHistoryApprover")
+  budgetRevisions   BudgetRevision[]
+  progressApprovalLogs ProgressApprovalLog[]
 
   @@index([companyId])
   @@index([email])
@@ -147,7 +171,15 @@ model Customer {
   company     Company           @relation(fields: [companyId], references: [id])
   store       Store?            @relation(fields: [storeId], references: [id])
   interactions CustomerInteraction[]
-  estimates   CustomerEstimate[]
+  estimates            CustomerEstimate[]
+  afterCareSchedules   AfterCareSchedule[]
+  satisfactionSurveys  CustomerSatisfaction[]
+  warrantyRecords      WarrantyRecord[]
+  maintenanceContracts MaintenanceContract[]
+  claims               Claim[]
+  projectLedgers       ProjectLedger[]
+  receptionCards       ReceptionCard[]
+  bookings             Booking[]
 
   @@unique([companyId, customerNumber])
   @@index([companyId])
@@ -413,10 +445,14 @@ model StockCount {
 // ==================== Booking Service ====================
 model Resource {
   id        String   @id @default(cuid())
-  type      String   // MEETING_ROOM, CAR
+  type      String   // MEETING_ROOM, CONSULTATION_ROOM, VEHICLE
+  subType   String?  // For vehicles: sedan, van, truck
   name      String
   capacity  Int?
   location  String?
+  equipment String   @default("[]") // JSON array of equipment available
+  plateNumber String? // For vehicles
+  maintenanceStatus String @default("available") // available, in_use, maintenance, cleaning
   metadata  String     @default("{}")
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
@@ -426,6 +462,7 @@ model Resource {
   bookings Booking[]
 
   @@index([type])
+  @@index([maintenanceStatus])
   @@map("resources")
 }
 
@@ -434,26 +471,33 @@ model Booking {
   companyId  String
   storeId    String?
   userId     String
+  customerId String?  // For customer meetings
   resourceId String
   title      String
+  purpose    String?  // consultation, contract, payment, complaint, meeting, site_visit
   startTime  DateTime
   endTime    DateTime
-  status     String   // confirmed, cancelled, completed
+  status     String   // confirmed, cancelled, completed, no_show
   priority   Int      @default(0) // CRM priority
+  conflictResolution String? // For handling double booking
   notes      String?
   metadata   String     @default("{}")
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
-
+  confirmedAt DateTime?
+  
   // Relations
   company  Company   @relation(fields: [companyId], references: [id])
   store    Store?    @relation(fields: [storeId], references: [id])
   user     User      @relation(fields: [userId], references: [id])
+  customer Customer? @relation(fields: [customerId], references: [id])
   resource Resource  @relation(fields: [resourceId], references: [id])
 
   @@index([companyId])
   @@index([resourceId])
+  @@index([customerId])
   @@index([startTime, endTime])
+  @@index([status])
   @@map("bookings")
 }
 
@@ -623,6 +667,7 @@ model Expense {
   category        ExpenseCategory      @relation(fields: [categoryId], references: [id])
   approvalHistory ExpenseApproval[]
   attachments     ExpenseAttachment[]
+  approvalWorkflows ApprovalWorkflow[]
 
   @@index([companyId])
   @@index([userId])
@@ -703,6 +748,197 @@ model PaymentMethod {
   @@map("payment_methods")
 }
 
+
+// ==================== After-care Management (アフター管理) ====================
+model AfterCareSchedule {
+  id               String   @id @default(cuid())
+  companyId        String
+  storeId          String?
+  projectId        String   // Links to original project
+  customerId       String
+  inspectionType   String   // 1_month, 3_month, 6_month, 1_year, 2_year, 5_year, 10_year
+  scheduledDate    DateTime
+  assignedTo       String?  // User ID of assigned inspector
+  status           String   @default("scheduled") // scheduled, reminded, completed, defect_found, overdue
+  reminderSettings String   @default("{}") // JSON for reminder preferences
+  lastReminderAt   DateTime?
+  completedAt      DateTime?
+  completedBy      String?
+  notes            String?
+  metadata         String   @default("{}")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  // Relations
+  company          Company            @relation(fields: [companyId], references: [id])
+  store            Store?             @relation(fields: [storeId], references: [id])
+  customer         Customer           @relation(fields: [customerId], references: [id])
+  defects          DefectCase[]
+  reminders        InspectionReminder[]
+  checklistItems   ChecklistItem[]
+
+  @@index([companyId])
+  @@index([customerId])
+  @@index([scheduledDate])
+  @@index([status])
+  @@map("aftercare_schedules")
+}
+
+model DefectCase {
+  id               String   @id @default(cuid())
+  scheduleId       String
+  description      String
+  severity         String   // high, medium, low
+  category         String   // structural, waterproof, equipment, cosmetic
+  location         String?  // Specific location in property
+  photos           String   @default("[]") // JSON array of photo URLs
+  estimateId       String?  // Link to repair estimate
+  estimateAmount   Float?
+  status           String   @default("identified") // identified, estimate_created, approved, in_progress, completed
+  identifiedBy     String
+  identifiedAt     DateTime @default(now())
+  resolvedAt       DateTime?
+  resolvedBy       String?
+  metadata         String   @default("{}")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  // Relations
+  schedule AfterCareSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+
+  @@index([scheduleId])
+  @@index([severity])
+  @@index([status])
+  @@map("defect_cases")
+}
+
+model InspectionReminder {
+  id           String   @id @default(cuid())
+  scheduleId   String
+  type         String   // email, sms, phone, line
+  timing       String   // 1_month_before, 1_week_before, 1_day_before
+  sentAt       DateTime?
+  sentTo       String?  // Email/phone number
+  status       String   @default("pending") // pending, sent, failed
+  response     String?  // Customer response if any
+  metadata     String   @default("{}")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  schedule AfterCareSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+
+  @@index([scheduleId])
+  @@index([timing])
+  @@index([sentAt])
+  @@map("inspection_reminders")
+}
+
+model ChecklistItem {
+  id           String   @id @default(cuid())
+  scheduleId   String
+  category     String   // exterior, interior, equipment, structural
+  itemName     String
+  checkResult  String?  // OK, NG, NA
+  notes        String?
+  photoUrl     String?
+  checkedAt    DateTime?
+  checkedBy    String?
+  sequence     Int
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  schedule AfterCareSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+
+  @@index([scheduleId])
+  @@index([category])
+  @@map("checklist_items")
+}
+
+model CustomerSatisfaction {
+  id               String   @id @default(cuid())
+  companyId        String
+  customerId       String
+  projectId        String?
+  scheduleId       String?  // Link to inspection if survey after inspection
+  npsScore         Int      // 0-10 scale
+  satisfactionScore Float   // 1-5 scale
+  categories       String   @default("{}") // JSON for category-wise ratings
+  feedback         String?  // Text feedback
+  surveyType       String   // post_project, post_inspection, annual
+  surveyMethod     String   // email, phone, in_person
+  surveyDate       DateTime
+  respondedAt      DateTime?
+  metadata         String   @default("{}")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  // Relations
+  company  Company  @relation(fields: [companyId], references: [id])
+  customer Customer @relation(fields: [customerId], references: [id])
+
+  @@index([companyId])
+  @@index([customerId])
+  @@index([npsScore])
+  @@index([surveyDate])
+  @@map("customer_satisfaction")
+}
+
+model WarrantyRecord {
+  id            String   @id @default(cuid())
+  companyId     String
+  projectId     String
+  customerId    String
+  warrantyType  String   // structure, waterproof, equipment, paint, other
+  startDate     DateTime
+  endDate       DateTime
+  coverageDetails String // JSON with detailed coverage information
+  terms         String?  // Warranty terms and conditions
+  certificateNo String?
+  isActive      Boolean  @default(true)
+  claimCount    Int      @default(0)
+  metadata      String   @default("{}")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  company  Company  @relation(fields: [companyId], references: [id])
+  customer Customer @relation(fields: [customerId], references: [id])
+  claims   WarrantyClaim[]
+
+  @@unique([companyId, certificateNo])
+  @@index([companyId])
+  @@index([customerId])
+  @@index([endDate])
+  @@map("warranty_records")
+}
+
+model WarrantyClaim {
+  id           String   @id @default(cuid())
+  warrantyId   String
+  claimNo      String
+  description  String
+  claimDate    DateTime
+  status       String   @default("submitted") // submitted, investigating, approved, rejected, completed
+  resolution   String?
+  repairCost   Float?
+  approvedBy   String?
+  approvedAt   DateTime?
+  completedAt  DateTime?
+  metadata     String   @default("{}")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  warranty WarrantyRecord @relation(fields: [warrantyId], references: [id], onDelete: Cascade)
+
+  @@unique([warrantyId, claimNo])
+  @@index([warrantyId])
+  @@index([status])
+  @@map("warranty_claims")
+}
+
 // ==================== System ====================
 model AuditLog {
   id        String   @id @default(cuid())
@@ -726,4 +962,622 @@ model AuditLog {
   @@index([entity, entityId])
   @@index([createdAt])
   @@map("audit_logs")
+}// ==================== v1.1 新機能: 元帳管理サービス ====================
+model JournalEntry {
+  id            String   @id @default(cuid())
+  companyId     String
+  entryDate     DateTime
+  debitAccount  String
+  creditAccount String
+  amount        Decimal
+  description   String
+  reference     String?
+  status        String   // draft, posted, approved
+  createdBy     String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  company       Company  @relation(fields: [companyId], references: [id])
+
+  @@index([companyId])
+  @@index([entryDate])
+  @@map("journal_entries")
+}
+
+model Account {
+  id            String   @id @default(cuid())
+  companyId     String
+  code          String
+  name          String
+  type          String   // 資産/負債/資本/収益/費用
+  parentId      String?
+  balance       Decimal  @default(0)
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  company       Company  @relation(fields: [companyId], references: [id])
+  parent        Account? @relation("AccountHierarchy", fields: [parentId], references: [id])
+  children      Account[] @relation("AccountHierarchy")
+
+  @@unique([companyId, code])
+  @@index([companyId])
+  @@map("accounts")
+}
+
+// ==================== v1.1 強化: 経費承認ワークフロー ====================
+model ApprovalWorkflow {
+  id            String   @id @default(cuid())
+  expenseId     String
+  level         Int      // 承認段階
+  approverId    String
+  status        String   // pending, approved, rejected
+  comments      String?
+  approvedAt    DateTime?
+  createdAt     DateTime @default(now())
+
+  // Relations
+  expense       Expense  @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  approver      User     @relation(fields: [approverId], references: [id])
+
+  @@index([expenseId])
+  @@index([approverId])
+  @@map("approval_workflows")
+}
+
+// ==================== v1.1 新機能: 保守契約管理 ====================
+model MaintenanceContract {
+  id            String   @id @default(cuid())
+  companyId     String
+  customerId    String
+  projectId     String
+  contractNumber String
+  startDate     DateTime
+  endDate       DateTime
+  contractType  String   // basic, premium, extended
+  amount        Decimal
+  status        String   // active, expired, cancelled
+  terms         String?  // 契約条件
+  coverageDetails String @default("{}") // JSON
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  company       Company     @relation(fields: [companyId], references: [id])
+  customer      Customer    @relation(fields: [customerId], references: [id])
+  inspections   Inspection[]
+  maintenanceRecords MaintenanceRecord[]
+
+  @@unique([companyId, contractNumber])
+  @@index([companyId])
+  @@index([customerId])
+  @@map("maintenance_contracts")
+}
+
+model Inspection {
+  id            String   @id @default(cuid())
+  contractId    String
+  inspectionType String  // regular, emergency, warranty
+  scheduledDate DateTime
+  completedDate DateTime?
+  inspector     String
+  findings      String   @default("{}") // JSON
+  status        String   // scheduled, completed, cancelled
+  checklist     String   @default("{}") // JSON checklist
+  photos        String   @default("[]") // JSON array of photo URLs
+  recommendations String?
+  nextInspectionDate DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  contract      MaintenanceContract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  defects       DefectRecord[]
+
+  @@index([contractId])
+  @@index([scheduledDate])
+  @@map("inspections")
+}
+
+model DefectRecord {
+  id            String   @id @default(cuid())
+  inspectionId  String
+  category      String   // structural, waterproof, equipment, cosmetic
+  description   String
+  severity      String   // critical, high, medium, low
+  location      String?
+  photos        String   @default("[]") // JSON array
+  estimatedCost Decimal?
+  status        String   // identified, repair_scheduled, completed
+  repairDate    DateTime?
+  repairedBy    String?
+  repairCost    Decimal?
+  warrantyApplicable Boolean @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  inspection    Inspection @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+
+  @@index([inspectionId])
+  @@index([severity])
+  @@map("defect_records")
+}
+
+model MaintenanceRecord {
+  id            String   @id @default(cuid())
+  contractId    String
+  maintenanceType String // routine, emergency, repair
+  description   String
+  performedDate DateTime
+  performedBy   String
+  duration      Int?     // minutes
+  cost          Decimal?
+  materials     String   @default("[]") // JSON array
+  notes         String?
+  nextMaintenance DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  contract      MaintenanceContract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+
+  @@index([contractId])
+  @@index([performedDate])
+  @@map("maintenance_records")
+}
+
+model Claim {
+  id            String   @id @default(cuid())
+  companyId     String
+  customerId    String
+  projectId     String?
+  claimNumber   String
+  category      String   // quality, delay, cost, warranty
+  description   String
+  severity      String   // critical, high, medium, low
+  status        String   // open, investigating, resolved, closed
+  submittedDate DateTime
+  assignedTo    String?
+  resolution    String?
+  resolutionDate DateTime?
+  compensation  Decimal?
+  metadata      String   @default("{}")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  company       Company  @relation(fields: [companyId], references: [id])
+  customer      Customer @relation(fields: [customerId], references: [id])
+
+  @@unique([companyId, claimNumber])
+  @@index([companyId])
+  @@index([customerId])
+  @@index([status])
+  @@map("claims")
+}
+
+// ==================== v1.0 新機能: 工事台帳システム ====================
+model ProjectLedger {
+  id               String   @id @default(cuid())
+  companyId        String
+  storeId          String?
+  projectId        String   @unique // 見積・契約IDとリンク
+  customerId       String
+  contractAmount   Decimal
+  billingMode      String   // MILESTONE, PERCENT_COMPLETE
+  retainagePct     Decimal  @default(5.0) // 保留金率
+  retainageReleaseRule String @default("ON_FINAL") // ON_FINAL, ON_INSPECTION
+  status           String   @default("active") // active, completed, cancelled
+  dwSyncStatus     String   @default("pending") // DW連携ステータス
+  dwSyncAt         DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  // Relations
+  company          Company             @relation(fields: [companyId], references: [id])
+  store            Store?              @relation(fields: [storeId], references: [id])
+  customer         Customer            @relation(fields: [customerId], references: [id])
+  subLedgers       LedgerSub[]
+  changeOrders     ChangeOrder[]
+  retainage        Retainage?
+  milestoneBilling MilestoneBilling[]
+  contractHistory  ContractHistory[]
+  budgetRevisions  BudgetRevision[]
+  invoices         Invoice[]
+  retentionReleases RetentionRelease[]
+
+  @@index([companyId])
+  @@index([projectId])
+  @@index([customerId])
+  @@map("project_ledgers")
+}
+
+model LedgerSub {
+  id         String   @id @default(cuid())
+  ledgerId   String
+  tradeCode  String   // 工種コード
+  name       String
+  seq        Int      // 連番
+  status     String   @default("active")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // Relations
+  ledger    ProjectLedger  @relation(fields: [ledgerId], references: [id], onDelete: Cascade)
+  budgets   LedgerBudget[]
+  costs     LedgerCost[]
+  progress  LedgerProgress[]
+  invoiceLines InvoiceLine[]
+
+  @@unique([ledgerId, tradeCode, seq])
+  @@index([ledgerId])
+  @@map("ledger_subs")
+}
+
+model LedgerBudget {
+  id          String   @id @default(cuid())
+  subId       String
+  costCode    String   // 原価コード
+  costName    String
+  plannedQty  Decimal?
+  unit        String?
+  plannedAmt  Decimal
+  taxCode     String   @default("10") // 10%, 8%, non-taxable
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  sub LedgerSub @relation(fields: [subId], references: [id], onDelete: Cascade)
+
+  @@index([subId])
+  @@index([costCode])
+  @@map("ledger_budgets")
+}
+
+model LedgerCost {
+  id          String   @id @default(cuid())
+  subId       String
+  docType     String   // MATERIAL, OUTSOURCE, LABOR
+  vendorId    String?
+  vendorName  String
+  description String
+  quantity    Decimal?
+  unit        String?
+  unitPrice   Decimal?
+  amount      Decimal
+  taxCode     String   @default("10")
+  taxAmount   Decimal  @default(0)
+  invoiceNo   String?
+  invoiceDate DateTime?
+  paymentDate DateTime?
+  source      String   @default("MANUAL") // DW, UPLOAD, MANUAL
+  sourceRef   String?  // Reference to source system
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  sub LedgerSub @relation(fields: [subId], references: [id], onDelete: Cascade)
+
+  @@index([subId])
+  @@index([vendorId])
+  @@index([invoiceDate])
+  @@map("ledger_costs")
+}
+
+model LedgerProgress {
+  id             String   @id @default(cuid())
+  subId          String
+  date           DateTime
+  progressPct    Decimal  // 進捗率
+  earnedValueAmt Decimal  // 出来高金額
+  approvedBy     String?
+  approvedAt     DateTime?
+  dwSyncStatus   String?  // DW連携ステータス
+  dwSyncAt       DateTime?
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  // Relations
+  sub LedgerSub @relation(fields: [subId], references: [id], onDelete: Cascade)
+  approvalLogs ProgressApprovalLog[]
+
+  @@index([subId])
+  @@index([date])
+  @@map("ledger_progress")
+}
+
+model ChangeOrder {
+  id          String   @id @default(cuid())
+  ledgerId    String
+  code        String   // CO番号
+  description String
+  deltaAmt    Decimal  // 増減金額
+  reason      String
+  requestedBy String?
+  requestedAt DateTime?
+  approvedBy  String?
+  approvedAt  DateTime?
+  status      String   @default("draft") // draft, pending, approved, rejected
+  dwSyncStatus String? // DW連携ステータス
+  dwSyncAt    DateTime?
+  metadata    String   @default("{}")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  ledger ProjectLedger @relation(fields: [ledgerId], references: [id], onDelete: Cascade)
+
+  @@unique([ledgerId, code])
+  @@index([ledgerId])
+  @@index([status])
+  @@map("change_orders")
+}
+
+model Retainage {
+  id           String    @id @default(cuid())
+  ledgerId     String    @unique
+  pct          Decimal   // 保留金率
+  rule         String    // ON_FINAL, ON_INSPECTION
+  heldAmt      Decimal   @default(0) // 保留金額
+  releasedAmt  Decimal   @default(0) // 解放済金額
+  releasedAt   DateTime?
+  releasedBy   String?
+  notes        String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  // Relations
+  ledger ProjectLedger @relation(fields: [ledgerId], references: [id], onDelete: Cascade)
+
+  @@map("retainages")
+}
+
+model MilestoneBilling {
+  id          String    @id @default(cuid())
+  ledgerId    String
+  type        String    // START, MID, FINAL, CUSTOM
+  name        String
+  sequence    Int
+  plannedDate DateTime
+  plannedAmt  Decimal
+  billedAmt   Decimal   @default(0)
+  billedDate  DateTime?
+  invoiceNo   String?
+  status      String    @default("pending") // pending, billed, paid
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Relations
+  ledger ProjectLedger @relation(fields: [ledgerId], references: [id], onDelete: Cascade)
+
+  @@unique([ledgerId, sequence])
+  @@index([ledgerId])
+  @@index([plannedDate])
+  @@map("milestone_billings")
+}
+
+// ==================== v1.0 新機能: 受付・通知システム ====================
+model ReceptionCard {
+  id            String   @id @default(cuid())
+  companyId     String
+  storeId       String?
+  customerId    String?
+  visitorName   String
+  visitorPhone  String?
+  purpose       String   // 相談, 契約, 支払い, クレーム
+  priority      Int      @default(3) // 1-5
+  status        String   @default("waiting") // waiting, assigned, completed, cancelled
+  assignedTo    String?  // User ID
+  roomId        String?  // 自動割り当てされた商談室
+  notes         String?
+  arrivedAt     DateTime @default(now())
+  assignedAt    DateTime?
+  completedAt   DateTime?
+  createdBy     String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  company       Company  @relation(fields: [companyId], references: [id])
+  store         Store?   @relation(fields: [storeId], references: [id])
+  customer      Customer? @relation(fields: [customerId], references: [id])
+  createdByUser User     @relation("ReceptionCreatedBy", fields: [createdBy], references: [id])
+  assignedUser  User?    @relation("ReceptionAssignedTo", fields: [assignedTo], references: [id])
+
+  @@index([companyId])
+  @@index([status])
+  @@index([assignedTo])
+  @@map("reception_cards")
+}
+
+model Notification {
+  id          String   @id @default(cuid())
+  companyId   String
+  recipientId String
+  type        String   // email, sms, slack, chatwork, system
+  channel     String   // 具体的なチャネル
+  title       String
+  message     String
+  metadata    String   @default("{}")
+  status      String   @default("pending") // pending, sent, failed
+  sentAt      DateTime?
+  readAt      DateTime?
+  priority    Int      @default(3) // 1-5
+  createdBy   String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  company     Company @relation(fields: [companyId], references: [id])
+  recipient   User    @relation("NotificationRecipient", fields: [recipientId], references: [id])
+  creator     User    @relation("NotificationCreatedBy", fields: [createdBy], references: [id])
+
+  @@index([companyId])
+  @@index([recipientId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("notifications")
+}
+
+// ==================== v1.0 新機能: 業界標準プラン別機能 ====================
+
+// --- テナント設定（Lite/Standard/Pro） ---
+model CompanyPlan {
+  companyId   String   @id
+  plan        String   @default("LITE") // LITE, STANDARD, PRO
+  features    String   @default("{}") // JSON: {"retention": true, "co": true, "detailedExport": false}
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@map("company_plans")
+}
+
+// Plan enum replaced with String for SQLite compatibility
+// Values: "LITE", "STANDARD", "PRO"
+
+// --- 契約と工期の履歴（ど真ん中） ---
+model ContractHistory {
+  id           String   @id @default(cuid())
+  ledgerId     String
+  version      Int
+  contractAmt  Decimal  // 変更後の契約金額
+  durationDays Int?     // 工期変更も記録（任意）
+  reason       String?
+  approvedBy   String?
+  approvedAt   DateTime?
+  createdAt    DateTime @default(now())
+
+  // Relations
+  ledger       ProjectLedger @relation(fields: [ledgerId], references: [id], onDelete: Cascade)
+  approver     User?         @relation("ContractHistoryApprover", fields: [approvedBy], references: [id])
+
+  @@index([ledgerId])
+  @@index([version])
+  @@map("contract_history")
+}
+
+// --- 実行予算リビジョン（見積→契約→実行の差分管理） ---
+model BudgetRevision {
+  id          String   @id @default(cuid())
+  ledgerId    String
+  revisionNo  Int
+  note        String?
+  createdBy   String
+  createdAt   DateTime @default(now())
+
+  // Relations
+  ledger      ProjectLedger @relation(fields: [ledgerId], references: [id], onDelete: Cascade)
+  creator     User          @relation(fields: [createdBy], references: [id])
+
+  @@unique([ledgerId, revisionNo])
+  @@index([ledgerId])
+  @@map("budget_revisions")
+}
+
+// --- 出来高 承認ログ（監査） ---
+model ProgressApprovalLog {
+  id          String   @id @default(cuid())
+  progressId  String
+  approvedBy  String
+  level       Int      // 1=現場, 2=所長, 3=本部
+  approvedAt  DateTime @default(now())
+  comment     String?
+
+  // Relations
+  progress    LedgerProgress @relation(fields: [progressId], references: [id], onDelete: Cascade)
+  approver    User           @relation(fields: [approvedBy], references: [id])
+
+  @@index([progressId])
+  @@index([approvedBy])
+  @@map("progress_approval_logs")
+}
+
+// --- 請求・入金（会計と突合しやすいヘッダー明細） ---
+model Invoice {
+  id            String   @id @default(cuid())
+  ledgerId      String
+  invoiceNo     String
+  billType      String   // MILESTONE | PERCENT | RETAINAGE_RELEASE
+  billPeriod    String?  // "2025-08" 等
+  totalAmt      Decimal
+  taxAmt        Decimal? // 必要なら
+  status        String     @default("DRAFT") // DRAFT | ISSUED | PAID | PARTIAL | CANCELED
+  issuedAt      DateTime?
+  dueDate       DateTime?
+  createdAt     DateTime @default(now())
+
+  // Relations
+  ledger        ProjectLedger @relation(fields: [ledgerId], references: [id], onDelete: Cascade)
+  invoiceLines  InvoiceLine[]
+  payments      Payment[]
+
+  @@unique([invoiceNo])
+  @@index([ledgerId])
+  @@index([status])
+  @@map("invoices")
+}
+
+// BillType enum replaced with String for SQLite compatibility
+// Values: "MILESTONE", "PERCENT", "RETAINAGE_RELEASE"
+
+// BillStatus enum replaced with String for SQLite compatibility  
+// Values: "DRAFT", "ISSUED", "PAID", "PARTIAL", "CANCELED"
+
+model InvoiceLine {
+  id          String   @id @default(cuid())
+  invoiceId   String
+  subId       String?  // 工種別に行を出す場合
+  description String?
+  qty         Decimal? 
+  unitPrice   Decimal?
+  amount      Decimal
+  taxCode     String?
+
+  // Relations
+  invoice     Invoice    @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  sub         LedgerSub? @relation(fields: [subId], references: [id])
+
+  @@index([invoiceId])
+  @@map("invoice_lines")
+}
+
+// 入金（回収）記録
+model Payment {
+  id          String   @id @default(cuid())
+  invoiceId   String
+  paidAmt     Decimal
+  paidAt      DateTime
+  method      String?   // 振込/現金/カード 等
+  note        String?
+  createdAt   DateTime @default(now())
+
+  // Relations
+  invoice     Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([invoiceId])
+  @@index([paidAt])
+  @@map("payments")
+}
+
+// 保留金の解放イベント（いついくら解いたか）
+model RetentionRelease {
+  id          String   @id @default(cuid())
+  ledgerId    String
+  releaseAmt  Decimal
+  reason      String?   // 最終検収/保証書発行など
+  releasedAt  DateTime  @default(now())
+
+  // Relations
+  ledger      ProjectLedger @relation(fields: [ledgerId], references: [id], onDelete: Cascade)
+
+  @@index([ledgerId])
+  @@index([releasedAt])
+  @@map("retention_releases")
 }
