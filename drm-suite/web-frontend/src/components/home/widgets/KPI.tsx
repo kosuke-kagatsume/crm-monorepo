@@ -7,6 +7,7 @@ import type { Role } from '@/config/roleDashboard';
 import { roleMapping } from '@/config/roleDashboard';
 import { getKPIValue } from '@/services/stubData';
 import { formatKPIValue } from '@/utils/formatters';
+import { Mask } from '@/components/acl/Mask';
 
 interface KPIProps {
   role?: Role;
@@ -21,9 +22,30 @@ export function KPI({ role }: KPIProps) {
     if (role) {
       setCurrentRole(role);
     } else {
+      // 直接Role型での設定をサポート（localStorage.role = 'mgmt'）
+      const directRole = localStorage.getItem('role');
+      if (
+        directRole &&
+        [
+          'mgmt',
+          'branch',
+          'sales',
+          'accounting',
+          'marketing',
+          'foreman',
+          'clerk',
+          'aftercare',
+        ].includes(directRole)
+      ) {
+        setCurrentRole(directRole as Role);
+        return;
+      }
+
+      // 従来の日本語役職名でのマッピング
       const userRole = localStorage.getItem('userRole');
       if (userRole && roleMapping[userRole]) {
         setCurrentRole(roleMapping[userRole]);
+        return;
       }
     }
   }, [role]);
@@ -78,7 +100,19 @@ export function KPI({ role }: KPIProps) {
                 )}
               </div>
               <div className="text-2xl font-bold text-gray-900">
-                {formattedValue}
+                {kpi.mask ? (
+                  <Mask
+                    role={currentRole}
+                    can={
+                      kpi.mask === 'cost' ? 'canViewCost' : 'canViewGrossMargin'
+                    }
+                    fallback="—"
+                  >
+                    {formattedValue}
+                  </Mask>
+                ) : (
+                  formattedValue
+                )}
               </div>
               {/* トレンド表示（将来の拡張用） */}
               <div className="text-xs text-gray-500">

@@ -1,10 +1,9 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { useFeatureFlag } from '@/config/featureFlags';
+import { isFlagOn } from '@/config/featureFlags';
 import Link from 'next/link';
 
 interface Project {
@@ -22,8 +21,7 @@ interface Project {
 export function ProjectsSnap() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
-  const searchParams = useSearchParams();
-  const newEstimateEnabled = useFeatureFlag('new_estimate', searchParams);
+  const newEstimateEnabled = isFlagOn('new_estimate');
 
   useEffect(() => {
     fetchProjects();

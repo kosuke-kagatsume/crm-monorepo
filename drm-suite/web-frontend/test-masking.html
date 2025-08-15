@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Masking Test</title>
+</head>
+<body>
+    <h1>Permission Masking Test</h1>
+    <div id="results"></div>
+
+    <script>
+        // Simple permission masking test
+        const PERMISSIONS = {
+            mgmt: { canViewCost: true, canViewGrossMargin: true },
+            branch: { canViewCost: true, canViewGrossMargin: true },
+            sales: { canViewCost: false, canViewGrossMargin: false },
+            clerk: { canViewCost: false, canViewGrossMargin: false },
+            aftercare: { canViewCost: false, canViewGrossMargin: false },
+            accounting: { canViewCost: true, canViewGrossMargin: true },
+            marketing: { canViewCost: false, canViewGrossMargin: false },
+            foreman: { canViewCost: true, canViewGrossMargin: false }
+        };
+
+        function mask(role, permission, value) {
+            return PERMISSIONS[role][permission] ? value : '—';
+        }
+
+        // Test data
+        const testData = {
+            grossMargin: '34.5%',
+            cost: '¥150,000',
+            cpa: '¥3,500'
+        };
+
+        let html = '<h2>KPI Masking Test</h2>';
+        
+        ['mgmt', 'sales', 'clerk', 'aftercare'].forEach(role => {
+            html += `<h3>Role: ${role}</h3>`;
+            html += `<p>Gross Margin: ${mask(role, 'canViewGrossMargin', testData.grossMargin)}</p>`;
+            html += `<p>Cost: ${mask(role, 'canViewCost', testData.cost)}</p>`;
+            html += `<p>CPA: ${mask(role, 'canViewCost', testData.cpa)}</p>`;
+        });
+
+        // RAG masking patterns test
+        html += '<h2>RAG Masking Patterns Test</h2>';
+        const sensitiveText = '材料費: 150,000円、原価額: 200,000円、粗利率: 35.5%';
+        
+        const patterns = [
+            /\b原価[額費]?[：:\s]*[0-9,]+(?:\.\d+)?\b/g,
+            /\b粗利(?:率)?[：:\s]*[0-9.,]+%?\b/g,
+            /\b材料費[：:\s]*[0-9,]+(?:\.\d+)?\b/g
+        ];
+
+        function redactText(text, role) {
+            if (!['sales', 'clerk', 'aftercare'].includes(role)) {
+                return text;
+            }
+            
+            let redacted = text;
+            patterns.forEach(pattern => {
+                redacted = redacted.replace(pattern, '［非表示：権限がありません］');
+            });
+            return redacted;
+        }
+
+        ['mgmt', 'sales'].forEach(role => {
+            html += `<h3>Role: ${role}</h3>`;
+            html += `<p>Original: ${sensitiveText}</p>`;
+            html += `<p>Masked: ${redactText(sensitiveText, role)}</p>`;
+        });
+
+        document.getElementById('results').innerHTML = html;
+    </script>
+</body>
+</html>

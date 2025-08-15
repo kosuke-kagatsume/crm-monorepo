@@ -16,7 +16,17 @@ export function AccountingPanel() {
   return (
     <Card className="h-full">
       <CardHeader className="pb-3">
-        <CardTitle className="text-base">経理業務</CardTitle>
+        <div className="flex justify-between items-center">
+          <CardTitle className="text-base">経理業務</CardTitle>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-xs"
+            onClick={() => (window.location.href = '/ledger/overview')}
+          >
+            台帳 →
+          </Button>
+        </div>
         <div className="flex gap-1 mt-2">
           {tabs.map((tab) => (
             <Button

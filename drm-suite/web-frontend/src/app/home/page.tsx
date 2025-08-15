@@ -35,20 +35,39 @@ function HomePageContent() {
   const [newCustomerDialogOpen, setNewCustomerDialogOpen] = useState(false);
   const [ledgerMergeDialogOpen, setLedgerMergeDialogOpen] = useState(false);
 
-  // 新ダッシュモード検出
-  const isNewDashEnabled = isFlagOn('new_dash');
-  const dashMode = searchParams.get('mode');
-  const isNewDashMode = isNewDashEnabled && dashMode === 'dash';
+  // 新ダッシュモード検出（?ff:new_dash=on のみで制御）
+  const isNewDashMode = isFlagOn('new_dash');
 
-  // 役職の取得方法は既存クイックログインと同じ（localStorageなど）
+  // 役職の取得（localStorage.userRole または localStorage.role）
   useEffect(() => {
+    // 直接Role型での設定をサポート（localStorage.role = 'mgmt'）
+    const directRole = localStorage.getItem('role');
+    if (
+      directRole &&
+      [
+        'mgmt',
+        'branch',
+        'sales',
+        'accounting',
+        'marketing',
+        'foreman',
+        'clerk',
+        'aftercare',
+      ].includes(directRole)
+    ) {
+      setRole(directRole as Role);
+      return;
+    }
+
+    // 従来の日本語役職名でのマッピング
     const userRole = localStorage.getItem('userRole');
     if (userRole && roleMapping[userRole]) {
       setRole(roleMapping[userRole]);
-    } else {
-      // デフォルトは経営者
-      setRole('mgmt');
+      return;
     }
+
+    // デフォルトは経営者
+    setRole('mgmt');
   }, []);
 
   // ホーム画面用のキーボードショートカット
@@ -58,7 +77,7 @@ function HomePageContent() {
       {
         key: 'E',
         description: '見積一覧へ移動',
-        action: () => router.push('/estimate'),
+        action: () => router.push('/estimates'),
         enabled: true,
       },
       {
@@ -76,7 +95,7 @@ function HomePageContent() {
       {
         key: 'N',
         description: '新規見積作成',
-        action: () => router.push('/estimate/new'),
+        action: () => router.push('/estimates/new'),
         enabled: true,
       },
       {
@@ -132,7 +151,7 @@ function HomePageContent() {
 
   const renderers: Record<string, () => JSX.Element> = useMemo(
     () => ({
-      kpi: () => <W.KPI />,
+      kpi: () => <W.KPI role={role || 'mgmt'} />,
       alerts: () => <W.Alerts />,
       todo: () => <W.Todo />,
       projectsSnap: () => <W.ProjectsSnap />,
@@ -142,11 +161,17 @@ function HomePageContent() {
       accountingPanel: () => <W.AccountingPanel />,
       marketingPanel: () => <W.MarketingPanel />,
       aftercareFlow: () => <W.AftercareFlow />,
-      ragToggle: () => <W.RagToggle />,
+      ragToggle: () => (
+        <W.RagToggle
+          onClick={() => setRagVisible(!ragVisible)}
+          isOpen={ragVisible}
+        />
+      ),
       estimateActions: () => <W.EstimateActions />,
       dashboardActions: () => <W.DashboardActions />,
+      clerkActions: () => <W.ClerkActions />,
     }),
-    [],
+    [role, ragVisible],
   );
 
   if (!role) return null;
@@ -199,47 +224,70 @@ function HomePageContent() {
   // 従来のホームレイアウト
   return (
     <div className="container mx-auto max-w-6xl py-6 space-y-4">
-      {/* Feature Flag デバッグ情報（開発時のみ） */}
-      {process.env.NODE_ENV === 'development' && (
-        <div className="flex gap-2 p-3 bg-gray-50 rounded-lg">
-          <FlagDebugger flag="new_dash" />
-          <FlagDebugger flag="new_estimate" />
-          <FlagDebugger flag="keyboard_shortcuts" />
+      {/* 役職＆デバッグ情報 */}
+      <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+        <div className="flex items-center gap-3">
+          <span className="text-sm font-medium text-gray-700">
+            現在の役職: <span className="text-blue-600">{role}</span>
+          </span>
+          {process.env.NODE_ENV === 'development' && (
+            <div className="text-xs text-gray-500">
+              localStorage.role = '{role}' で切替可能
+            </div>
+          )}
         </div>
-      )}
+        {process.env.NODE_ENV === 'development' && (
+          <div className="flex gap-2">
+            <FlagDebugger flag="new_dash" />
+            <FlagDebugger flag="new_estimate" />
+            <FlagDebugger flag="keyboard_shortcuts" />
+          </div>
+        )}
+      </div>
 
-      {/* 上段：2カラム（KPI/Alerts など） */}
+      {/* roleConfigの順序通りにウィジェット配置 */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {/* 左2カラムに主要ウィジェット、右1カラムは操作系やragトグル */}
+        {/* 左2カラム：KPIなどメインウィジェット */}
         <div className="md:col-span-2 space-y-4">
           {widgets
             .filter((w) => w !== 'ragToggle')
-            .slice(0, 3)
+            .slice(0, 2) // 上段2つまで
             .map((w, idx) => (
               <div key={w + idx}>{renderers[w]?.()}</div>
             ))}
         </div>
+
+        {/* 右カラム：RAGトグルボタン + その他 */}
         <div className="space-y-4">
-          {/* 右カラム：ragToggle が定義されていればボタン表示 */}
+          {/* RAGトグルボタンを右列に表示 */}
           {widgets.includes('ragToggle') && (
-            <div
+            <W.RagToggle
               onClick={() => setRagVisible(!ragVisible)}
-              className="cursor-pointer"
-            >
-              <W.RagToggle />
-            </div>
+              isOpen={ragVisible}
+            />
           )}
+
+          {/* 右カラム用の追加ウィジェット（3番目以降で小さなもの） */}
+          {widgets
+            .filter((w) => w !== 'ragToggle')
+            .slice(2, 3) // 3番目のウィジェットを右カラムに
+            .map((w, idx) => (
+              <div key={w + idx + 'right'}>{renderers[w]?.()}</div>
+            ))}
         </div>
       </div>
 
-      {/* 下段：残りのウィジェットを並べる */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {widgets
-          .filter((_, i) => i >= 3 && _ !== 'ragToggle')
-          .map((w, idx) => (
-            <div key={w + idx}>{renderers[w]?.()}</div>
-          ))}
-      </div>
+      {/* 中段・下段：残りのウィジェット */}
+      {widgets.filter((w) => w !== 'ragToggle').length > 3 && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {widgets
+            .filter((w) => w !== 'ragToggle')
+            .slice(3) // 4番目以降
+            .map((w, idx) => (
+              <div key={w + idx + 'bottom'}>{renderers[w]?.()}</div>
+            ))}
+        </div>
+      )}
 
       {/* RAGパネル */}
       <RAGPanel

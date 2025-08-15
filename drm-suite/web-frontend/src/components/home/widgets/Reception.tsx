@@ -1,10 +1,9 @@
 'use client';
 import { useState } from 'react';
-import { useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { useFeatureFlag } from '@/config/featureFlags';
+import { isFlagOn } from '@/config/featureFlags';
 import Link from 'next/link';
 
 interface Inquiry {
@@ -18,8 +17,7 @@ interface Inquiry {
 }
 
 export function Reception() {
-  const searchParams = useSearchParams();
-  const newEstimateEnabled = useFeatureFlag('new_estimate', searchParams);
+  const newEstimateEnabled = isFlagOn('new_estimate');
   const [inquiries] = useState<Inquiry[]>([
     {
       id: 'INQ-001',

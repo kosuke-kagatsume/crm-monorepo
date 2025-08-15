@@ -1,0 +1,20 @@
+name: Guard /projects
+on:
+  pull_request:
+    paths:
+      - 'web-frontend/src/app/projects/**'
+      - '.github/workflows/guard-projects.yml'
+jobs:
+  block-edits:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - name: Fail if /projects changed
+        run: |
+          CHANGED=$(git diff --name-only origin/${{ github.base_ref }}... | grep '^web-frontend/src/app/projects/' || true)
+          if [ -n "$CHANGED" ]; then
+            echo "ERROR: /projects 配下の改変は契約違反です。別ページで実装してください。"
+            echo "$CHANGED"
+            exit 1
+          fi

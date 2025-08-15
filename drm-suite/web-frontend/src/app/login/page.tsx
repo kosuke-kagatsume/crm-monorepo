@@ -133,9 +133,9 @@ export default function LoginPage() {
       localStorage.setItem('userRole', account.role);
       localStorage.setItem('userEmail', account.email);
       localStorage.setItem('userName', account.name);
-      // ホームへ遷移
+      // ホームへ遷移（useRouterを使用）
       setTimeout(() => {
-        window.location.href = '/home';
+        router.push('/home');
       }, 500);
     }
   };

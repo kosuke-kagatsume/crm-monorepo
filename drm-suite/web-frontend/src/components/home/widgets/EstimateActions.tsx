@@ -42,7 +42,7 @@ export function EstimateActions() {
         >
           <div className="space-y-2">
             <Button
-              onClick={() => router.push('/estimate')}
+              onClick={() => router.push('/estimates')}
               className="w-full justify-start bg-blue-600 hover:bg-blue-700"
             >
               <Calculator className="mr-2 h-4 w-4" />
@@ -50,7 +50,7 @@ export function EstimateActions() {
             </Button>
 
             <Button
-              onClick={() => router.push('/estimate/new')}
+              onClick={() => router.push('/estimates/new')}
               variant="outline"
               className="w-full justify-start border-blue-200 text-blue-700 hover:bg-blue-50"
             >

@@ -7,6 +7,7 @@ export type KPIItem = {
   // 式はバックエンド or フロントの計算キー。まずはダミーキーでOK
   formulaKey: string; // 例: 'sales.thisMonth', 'grossMargin.rate'
   hint?: string;
+  mask?: 'cost' | 'gross'; // 権限マスク対象
 };
 
 export type TableColumn = {
@@ -49,6 +50,7 @@ export const WIDGET_SPECS: Record<Role, RoleWidgetSpec> = {
         label: '粗利率',
         fmt: 'percent',
         formulaKey: 'gross_margin_rate',
+        mask: 'gross',
       },
       {
         id: 'cash',
@@ -111,6 +113,7 @@ export const WIDGET_SPECS: Record<Role, RoleWidgetSpec> = {
         label: '粗利率',
         fmt: 'percent',
         formulaKey: 'gross_margin_rate',
+        mask: 'gross',
       },
       {
         id: 'contracts_mtd',
@@ -314,6 +317,7 @@ export const WIDGET_SPECS: Record<Role, RoleWidgetSpec> = {
         label: 'CPA',
         fmt: 'currency',
         formulaKey: 'cost_per_acquisition',
+        mask: 'cost',
       },
     ],
     tables: [

@@ -22,7 +22,8 @@ export type WidgetId =
   | 'aftercareFlow' // 点検→是正見積→台帳合流
   | 'ragToggle' // RAGのトグルボタン
   | 'estimateActions' // 見積システム（新旧切替）
-  | 'dashboardActions'; // ダッシュボード（新旧切替）
+  | 'dashboardActions' // ダッシュボード（新旧切替）
+  | 'clerkActions'; // 事務職用予約ボタン
 
 export const roleConfig: Record<Role, { widgets: WidgetId[] }> = {
   mgmt: {
@@ -58,7 +59,7 @@ export const roleConfig: Record<Role, { widgets: WidgetId[] }> = {
     widgets: ['estimateActions', 'kpi', 'todo', 'ledgerActions', 'ragToggle'],
   },
   clerk: {
-    widgets: ['estimateActions', 'reception', 'booking', 'todo', 'ragToggle'],
+    widgets: ['clerkActions', 'reception', 'booking', 'todo', 'ragToggle'],
   },
   aftercare: {
     widgets: ['estimateActions', 'aftercareFlow', 'todo', 'ragToggle'],

@@ -12,3 +12,4 @@ export { RagToggle } from './RagToggle';
 export { EstimateActions } from './EstimateActions';
 export { DashboardActions } from './DashboardActions';
 export { DataTable } from './DataTable';
+export { ClerkActions } from './ClerkActions';
