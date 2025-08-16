@@ -235,6 +235,12 @@ function HomePageContent() {
               localStorage.role = '{role}' で切替可能
             </div>
           )}
+          <a
+            href="/dash"
+            className="inline-flex items-center gap-2 text-sm border rounded px-3 py-1 hover:bg-gray-100"
+          >
+            🚀 新ダッシュ（β）へ
+          </a>
         </div>
         {process.env.NODE_ENV === 'development' && (
           <div className="flex gap-2">
