@@ -1,5 +1,6 @@
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+export const revalidate = 0; // キャッシュ無効（Vercelでの空返り対策）
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
@@ -80,5 +81,17 @@ export async function GET(req: NextRequest) {
     if (key in buckets) buckets[key] += Number(r.amount_ex || 0);
   });
 
-  return NextResponse.json({ totals, payables_by_month: buckets });
+  return NextResponse.json(
+    {
+      totals: totals || {
+        estimate_revenue_ex: 0,
+        estimate_cost_ex: 0,
+        committed_cost_ex: 0,
+        actual_cost_ex: 0,
+        gross_ex: 0,
+      },
+      payables_by_month: buckets || {},
+    },
+    { headers: { 'Cache-Control': 'no-store' } },
+  );
 }

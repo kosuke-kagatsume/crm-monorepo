@@ -7,5 +7,5 @@
                        radial-gradient(1000px 500px at 80% -20%, #10b981 0%, transparent 55%); }
 body { background: #0b1220; background-image: var(--bg-grad); background-attachment: fixed; }
 .card-glass { @apply rounded-xl border shadow-sm backdrop-blur; background: rgba(255,255,255,.08); border-color: rgba(255,255,255,.16); }
-.card-solid { @apply rounded-xl border shadow-sm; background: rgba(255,255,255,.86); border-color: rgba(255,255,255,.5); }
+.card-solid { @apply rounded-xl border shadow; background: rgba(255,255,255,.86); border-color: rgba(255,255,255,.5); }
 .dark .card-solid { background: rgba(23,23,23,.86); border-color: rgba(64,64,64,.6); }

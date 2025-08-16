@@ -55,9 +55,41 @@ export default function Dash() {
     [],
   );
 
+  // 安全に JSON へ落とす小ヘルパ
+  async function safeJson(res: Response) {
+    const ct = res.headers.get('content-type') || '';
+    if (res.status === 204) return {}; // No Content
+    const text = await res.text(); // まずテキストで読む
+    if (!text) return {}; // 空なら空オブジェクト
+    if (ct.includes('application/json')) {
+      try {
+        return JSON.parse(text);
+      } catch {
+        /* fallthrough */
+      }
+    }
+    // JSON以外（HTMLエラーページ等）は内容を添えて投げる
+    throw new Error(`${res.status} ${res.statusText} ${text.slice(0, 120)}`);
+  }
+
+  async function approve(x: any) {
+    try {
+      const r = await fetch('/api/construction/approve', { method: 'POST' });
+      const j = await r.json();
+      if (r.ok && j.ok) {
+        alert('承認しました'); // 手早く
+        await load(); // リスト更新（残高が連動するようになったらここで反映）
+      } else {
+        alert('承認に失敗しました');
+      }
+    } catch {
+      alert('承認に失敗しました');
+    }
+  }
+
   async function load() {
+    // tenant 未入力はデモ表示（現状のままでOK）
     if (!tenant) {
-      // デモモードで"映える"表示
       setOv(demoOverview() as any);
       setPay(demoPay());
       setErr('');
@@ -66,20 +98,26 @@ export default function Dash() {
     setErr('');
     try {
       const [r1, r2] = await Promise.all([
-        fetch(`/api/dash/overview?tenant=${tenant}&role=${role}`),
-        fetch(`/api/finance/accounting/summary?tenant=${tenant}`),
+        fetch(`/api/dash/overview?tenant=${tenant}&role=${role}`, {
+          cache: 'no-store',
+        }),
+        fetch(`/api/finance/accounting/summary?tenant=${tenant}`, {
+          cache: 'no-store',
+        }),
       ]);
-      const j1 = await r1.json(),
-        j2 = await r2.json();
-      if (!r1.ok) throw new Error(j1.error || 'overview error');
-      if (!r2.ok) throw new Error(j2.error || 'summary error');
+      const j1 = await safeJson(r1);
+      const j2 = await safeJson(r2);
+
+      if (!r1.ok) throw new Error(j1?.error || `overview ${r1.status}`);
+      if (!r2.ok) throw new Error(j2?.error || `summary ${r2.status}`);
+
       setOv(j1);
-      setPay(j2.payables_by_month || {});
+      setPay(j2?.payables_by_month ?? {});
     } catch (e: any) {
-      // API失敗時も"映える"デモを表示しつつ右上にエラー
+      // 失敗しても"映える"状態は維持。右上にだけ理由を表示
       setOv(demoOverview() as any);
       setPay(demoPay());
-      setErr(e?.message || 'error');
+      setErr(e?.message || 'fetch error');
     }
   }
   useEffect(() => {
@@ -199,7 +237,10 @@ export default function Dash() {
                     >
                       ¥{fmt(x.remain)}
                     </div>
-                    <button className="px-3 py-1 rounded bg-sky-600 text-white text-sm">
+                    <button
+                      className="px-3 py-1 rounded bg-sky-600 text-white text-sm"
+                      onClick={() => approve(x)}
+                    >
                       承認
                     </button>
                   </div>
