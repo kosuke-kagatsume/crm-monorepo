@@ -14,9 +14,9 @@ export default function Sparkline({
   if (!points?.length) return <div style={{ width, height }} />;
   const min = Math.min(...points),
     max = Math.max(...points);
+  const step = width / Math.max(points.length - 1, 1);
   const norm = (v: number) =>
     max === min ? height / 2 : height - ((v - min) / (max - min)) * height;
-  const step = width / Math.max(points.length - 1, 1);
   const d = points
     .map((v, i) => `${i ? 'L' : 'M'} ${i * step} ${norm(v)}`)
     .join(' ');

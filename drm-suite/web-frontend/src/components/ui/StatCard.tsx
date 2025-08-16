@@ -1,7 +1,5 @@
 'use client';
 import Sparkline from './Sparkline';
-
-type Delta = { value: number; unit?: string };
 export default function StatCard({
   title,
   value,
@@ -12,7 +10,7 @@ export default function StatCard({
   title: string;
   value: number | string | null;
   sub?: string;
-  delta?: Delta;
+  delta?: { value: number; unit?: string };
   spark?: number[];
 }) {
   const v =
@@ -21,18 +19,22 @@ export default function StatCard({
       : typeof value === 'number'
         ? new Intl.NumberFormat('ja-JP').format(value)
         : value;
-  const up = delta && delta.value > 0,
-    dn = delta && delta.value < 0;
+  const tone = !delta
+    ? 'bg-white/10 text-white'
+    : delta.value > 0
+      ? 'bg-green-50 text-green-700'
+      : delta.value < 0
+        ? 'bg-red-50 text-red-700'
+        : 'bg-gray-50 text-gray-600';
   return (
-    <div className="rounded-xl p-4 bg-white/80 dark:bg-neutral-900/70 shadow-sm border border-white/40 dark:border-neutral-800 backdrop-blur">
+    <div className="card-solid p-4">
       <div className="text-xs text-gray-600 dark:text-gray-400">{title}</div>
       <div className="flex items-end gap-2 mt-1">
         <div className="text-2xl font-semibold">{v}</div>
         {delta && (
-          <span
-            className={`text-xs px-1.5 py-0.5 rounded ${up ? 'bg-green-50 text-green-700' : dn ? 'bg-red-50 text-red-700' : 'bg-gray-50 text-gray-600'}`}
-          >
-            {up ? '▲' : dn ? '▼' : '='} {Math.abs(delta.value)}
+          <span className={`text-xs px-1.5 py-0.5 rounded ${tone}`}>
+            {delta.value > 0 ? '▲' : delta.value < 0 ? '▼' : '='}{' '}
+            {Math.abs(delta.value)}
             {delta.unit ?? '%'}
           </span>
         )}
