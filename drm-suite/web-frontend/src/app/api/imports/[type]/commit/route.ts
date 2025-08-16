@@ -7,6 +7,7 @@ import { createClient } from '@supabase/supabase-js';
 import { toUtf8 } from '@/lib/csv/encoding';
 import { parseCsv } from '@/lib/csv/parse';
 import { EstimateRow, PORow, BillRow } from '@/lib/csv/schemas';
+import { applyHeaderMap } from '@/lib/csv/map';
 import { z } from 'zod';
 
 /** ====== Supabase クライアント ======
@@ -14,10 +15,13 @@ import { z } from 'zod';
  * 代替: SERVICE_ROLE があればそれで実行（RLS無視）。この場合は tenant_id を必ず明示して投入。
  */
 function getSupabase(req: NextRequest) {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!url) {
+    throw new Error('supabaseUrl is required.');
+  }
   const headerAuth = req.headers.get('authorization');
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'dummy-anon-key';
 
   const key = headerAuth ? anonKey : (serviceKey ?? anonKey);
   const headers: Record<string, string> = {};
@@ -79,10 +83,13 @@ async function upsertChunk<T extends Record<string, any>>(
   return inserted;
 }
 
-export async function POST(req: NextRequest) {
+export async function POST(
+  req: NextRequest,
+  { params }: { params: { type: string } },
+) {
   try {
     const supabase = getSupabase(req);
-    const type = req.nextUrl.searchParams.get('type') as CSVType | null;
+    const type = params.type as CSVType | null;
     if (!type || !(type in schemas)) {
       return NextResponse.json(
         { error: 'invalid type (estimate|po|bill)' },
@@ -90,11 +97,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // SERVICE_ROLE 経由で入れる場合は tenant をクエリ必須
-    const tenantIdParam = req.nextUrl.searchParams.get('tenant') ?? undefined;
-
+    // SERVICE_ROLE 経由で入れる場合は tenant をフォームから取得
     const form = await req.formData();
-    const file = form.get('file') as File | null;
+    const tenantIdParam = form.get('tenant') as string | undefined;
+    const file = form.get('csv') as File | null;
     if (!file)
       return NextResponse.json({ error: 'file required' }, { status: 400 });
 
@@ -102,7 +108,10 @@ export async function POST(req: NextRequest) {
     const text = toUtf8(buf);
 
     // 解析
-    const rawRows = parseCsv(text);
+    const headerMapStr = form.get('header_map') as string | null;
+    let rawRows = parseCsv(text);
+    const headerMap = headerMapStr ? JSON.parse(headerMapStr) : undefined;
+    rawRows = applyHeaderMap(rawRows, headerMap);
 
     // スキーマ検証（全行）
     const schema = schemas[type];
