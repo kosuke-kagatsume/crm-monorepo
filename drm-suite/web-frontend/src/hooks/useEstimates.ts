@@ -1,13 +1,22 @@
-// Custom Hook for Estimate Management
+/**
+ * Estimate Management Custom Hook
+ * 見積データの取得・作成・更新・削除・承認フローを管理
+ */
 import { useState, useEffect } from 'react';
 import { Estimate, EstimateFilter, EstimateStats } from '@/types/estimate';
 import { estimateService } from '@/services/estimate.service';
 
+/**
+ * useEstimatesフックのオプション
+ */
 export interface UseEstimatesOptions {
   filter?: EstimateFilter;
   autoFetch?: boolean;
 }
 
+/**
+ * useEstimatesフックの戻り値
+ */
 export interface UseEstimatesReturn {
   estimates: Estimate[];
   loading: boolean;

@@ -3,12 +3,18 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 
+/**
+ * ユーザー情報の型定義
+ */
 interface User {
   email: string;
   name: string;
   role: string;
 }
 
+/**
+ * 認証コンテキストの型定義
+ */
 interface AuthContextType {
   user: User | null;
   isLoading: boolean;
@@ -23,6 +29,11 @@ const AuthContext = createContext<AuthContextType>({
   logout: () => {},
 });
 
+/**
+ * 認証情報を取得するカスタムフック
+ * @returns {AuthContextType} 認証コンテキスト
+ * @throws {Error} AuthProvider外で使用された場合
+ */
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) {
@@ -34,6 +45,11 @@ export const useAuth = () => {
 // 認証不要なパス
 const publicPaths = ['/login', '/', '/api'];
 
+/**
+ * 認証プロバイダーコンポーネント
+ * アプリケーション全体の認証状態を管理
+ * @param {React.ReactNode} children - 子コンポーネント
+ */
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();

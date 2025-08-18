@@ -3,13 +3,26 @@
 import { useState } from 'react';
 import { CustomerStatus } from '@/types/customer';
 
+/**
+ * 顧客フォームのプロパティ
+ */
 interface CustomerFormProps {
+  /** フォーム送信時のコールバック */
   onSubmit: (customerData: any) => Promise<void>;
+  /** キャンセル時のコールバック */
   onCancel: () => void;
+  /** 初期データ（編集時） */
   initialData?: any;
+  /** 編集モードフラグ */
   isEditing?: boolean;
 }
 
+/**
+ * 顧客情報入力フォームコンポーネント
+ * 新規作成・編集両方に対応
+ * @param {CustomerFormProps} props - フォームのプロパティ
+ * @returns {JSX.Element} 顧客フォーム
+ */
 export default function CustomerForm({
   onSubmit,
   onCancel,

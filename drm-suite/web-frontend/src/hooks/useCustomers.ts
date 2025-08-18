@@ -1,13 +1,22 @@
-// Custom Hook for Customer Management
+/**
+ * Customer Management Custom Hook
+ * 顧客データの取得・作成・更新・削除を管理
+ */
 import { useState, useEffect } from 'react';
 import { Customer, CustomerFilter, CustomerStats } from '@/types/customer';
 import { customerService } from '@/services/customer.service';
 
+/**
+ * useCustomersフックのオプション
+ */
 export interface UseCustomersOptions {
   filter?: CustomerFilter;
   autoFetch?: boolean;
 }
 
+/**
+ * useCustomersフックの戻り値
+ */
 export interface UseCustomersReturn {
   customers: Customer[];
   loading: boolean;
@@ -27,6 +36,11 @@ export interface UseCustomersReturn {
   clearFilter: () => void;
 }
 
+/**
+ * 顧客管理用カスタムフック
+ * @param {UseCustomersOptions} options - フックのオプション
+ * @returns {UseCustomersReturn} 顧客データと操作関数
+ */
 export const useCustomers = (
   options: UseCustomersOptions = {},
 ): UseCustomersReturn => {

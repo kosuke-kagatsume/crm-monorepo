@@ -42,6 +42,14 @@ export interface CustomerInteraction {
 }
 
 class CustomerService {
+  /**
+   * APIリクエスト共通処理
+   * @private
+   * @param {string} endpoint - APIエンドポイント
+   * @param {RequestInit} options - リクエストオプション
+   * @returns {Promise<T>} APIレスポンス
+   * @throws {Error} APIエラー
+   */
   private async request<T>(
     endpoint: string,
     options: RequestInit = {},
@@ -74,7 +82,11 @@ class CustomerService {
     return response.json();
   }
 
-  // 顧客一覧取得
+  /**
+   * 顧客一覧取得
+   * @param {CustomerFilter} filter - 検索フィルター
+   * @returns {Promise} 顧客リストと総数
+   */
   async getCustomers(filter?: CustomerFilter): Promise<{
     customers: Customer[];
     total: number;
