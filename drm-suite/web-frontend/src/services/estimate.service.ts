@@ -1,4 +1,6 @@
-// Estimate Service - 見積管理API
+/**
+ * Estimate Service - 見積管理API
+ */
 import {
   Estimate,
   EstimateStatus,

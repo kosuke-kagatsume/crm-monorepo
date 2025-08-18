@@ -1,5 +1,5 @@
 import './global.css';
-import { Providers } from '@/components/Providers';
+import { Providers } from '@/components/providers';
 
 export const metadata = {
   title: 'DRM Suite - Dandori Relation Management',

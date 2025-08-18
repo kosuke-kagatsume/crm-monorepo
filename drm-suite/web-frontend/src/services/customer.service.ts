@@ -1,4 +1,6 @@
-// Customer Service - 顧客管理API
+/**
+ * Customer Service - 顧客管理API
+ */
 import { Customer, CustomerStatus } from '@/types/customer';
 
 const CUSTOMER_API_URL =

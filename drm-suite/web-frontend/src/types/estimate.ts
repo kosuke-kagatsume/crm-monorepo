@@ -1,4 +1,6 @@
-// Estimate Types - 見積管理関連の型定義
+/**
+ * Estimate Types - 見積管理関連の型定義
+ */
 
 export type EstimateStatus =
   | 'draft' // 下書き
@@ -10,6 +12,7 @@ export type EstimateStatus =
   | 'expired'; // 期限切れ
 
 export interface EstimateItem {
+  // Basic Information
   id: string;
   category: string; // 工事項目カテゴリ
   subcategory?: string; // サブカテゴリ
@@ -20,22 +23,22 @@ export interface EstimateItem {
   unitPrice: number; // 単価
   amount: number; // 金額（数量×単価）
 
-  // 原価情報
+  // Cost Information (原価情報)
   costPrice: number; // 原価単価
   grossProfit: number; // 粗利益
   profitRate: number; // 粗利率（%）
 
-  // 詳細原価内訳
+  // Cost Breakdown (詳細原価内訳)
   materialCost?: number; // 材料費
   laborCost?: number; // 労務費
   subcontractorCost?: number; // 外注費
 
-  // メタデータ
+  // Metadata
   vendor?: string; // 仕入先・協力会社
   remarks?: string; // 備考
   isHighlighted?: boolean; // 強調表示
 
-  // 承認・変更履歴
+  // Approval & History (承認・変更履歴)
   approvedBy?: string;
   approvedAt?: string;
   lastModifiedBy?: string;

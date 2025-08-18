@@ -1,8 +1,11 @@
-// Customer Types - 顧客管理関連の型定義
+/**
+ * Customer Types - 顧客管理関連の型定義
+ */
 
 export type CustomerStatus = 'lead' | 'prospect' | 'customer' | 'inactive';
 
 export interface Customer {
+  // Basic Information
   id: string;
   name: string;
   company?: string;
@@ -15,18 +18,18 @@ export interface Customer {
   assignee: string;
   notes?: string;
 
-  // 営業関連情報
+  // Sales Information (営業関連情報)
   lastContact?: string;
   nextAction?: string;
   value: number; // 顧客価値（見込み金額）
   source?: string; // 獲得チャネル（web, referral, direct等）
 
-  // メタデータ
+  // Metadata
   createdAt: string;
   updatedAt: string;
   createdBy: string;
 
-  // 関連データ
+  // Related Data (関連データ)
   estimatesCount?: number;
   contractsCount?: number;
   totalRevenue?: number;
