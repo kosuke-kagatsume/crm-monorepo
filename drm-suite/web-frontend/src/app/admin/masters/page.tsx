@@ -281,7 +281,13 @@ export default function MastersManagement() {
           {masterCategories.map((category) => (
             <button
               key={category.id}
-              onClick={() => setSelectedCategory(category.id)}
+              onClick={() => {
+                if (category.path) {
+                  router.push(category.path);
+                } else {
+                  setSelectedCategory(category.id);
+                }
+              }}
               className={`bg-white rounded-xl shadow-md hover:shadow-xl transition-all duration-200 p-6 text-left ${
                 selectedCategory === category.id ? 'ring-2 ring-red-500' : ''
               }`}
