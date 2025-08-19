@@ -209,15 +209,24 @@ export default function AdminDashboard() {
               承認フロー設定
             </h3>
             <div className="space-y-3">
-              <button className="w-full text-left p-3 rounded-lg hover:bg-gray-50 flex items-center justify-between group">
+              <button
+                onClick={() => router.push('/admin/approval-flows')}
+                className="w-full text-left p-3 rounded-lg hover:bg-gray-50 flex items-center justify-between group"
+              >
                 <span>見積承認ルート</span>
                 <ChevronRight className="h-4 w-4 text-gray-400 group-hover:text-gray-600" />
               </button>
-              <button className="w-full text-left p-3 rounded-lg hover:bg-gray-50 flex items-center justify-between group">
+              <button
+                onClick={() => router.push('/admin/approval-flows')}
+                className="w-full text-left p-3 rounded-lg hover:bg-gray-50 flex items-center justify-between group"
+              >
                 <span>発注承認ルート</span>
                 <ChevronRight className="h-4 w-4 text-gray-400 group-hover:text-gray-600" />
               </button>
-              <button className="w-full text-left p-3 rounded-lg hover:bg-gray-50 flex items-center justify-between group">
+              <button
+                onClick={() => router.push('/admin/approval-flows')}
+                className="w-full text-left p-3 rounded-lg hover:bg-gray-50 flex items-center justify-between group"
+              >
                 <span>経費承認ルート</span>
                 <ChevronRight className="h-4 w-4 text-gray-400 group-hover:text-gray-600" />
               </button>
