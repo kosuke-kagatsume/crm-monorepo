@@ -15,7 +15,7 @@ const OfficeDashboard = lazy(() => import('./office/page'));
 const AftercareDashboard = lazy(() => import('./aftercare/page'));
 
 export default function DashboardPage() {
-  const { user, isLoading, logout } = useAuth();
+  const { user, isLoading, logout, isSuperAdmin } = useAuth();
   const router = useRouter();
   const [showEstimateModal, setShowEstimateModal] = useState(false);
 
@@ -118,6 +118,15 @@ export default function DashboardPage() {
               </p>
             </div>
             <div className="flex items-center gap-2 sm:gap-4">
+              {isSuperAdmin() && (
+                <button
+                  onClick={() => router.push('/admin')}
+                  className="bg-red-500/20 hover:bg-red-500/30 px-3 sm:px-4 py-2 rounded transition text-sm sm:text-base whitespace-nowrap border border-white/30"
+                >
+                  <span className="mr-1 sm:mr-2">⚡</span>
+                  <span>管理コンソール</span>
+                </button>
+              )}
               {(getRoleMapping(user.role) === 'sales' ||
                 getRoleMapping(user.role) === 'manager' ||
                 getRoleMapping(user.role) === 'executive') && (

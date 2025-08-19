@@ -31,6 +31,17 @@ export default function LoginPage() {
 
   const quickAccounts: QuickLoginAccount[] = [
     {
+      name: 'スーパー管理者',
+      role: 'スーパー管理者',
+      email: 'super@demo.com',
+      password: 'demo123',
+      status: 'admin',
+      department: 'システム管理',
+      permissions: ['全権限', 'システム設定', 'ユーザー管理', 'データ管理'],
+      avatar: '⚡',
+      gradient: 'linear-gradient(135deg, #FF6B6B 0%, #4ECDC4 100%)',
+    },
+    {
       name: '山田 太郎',
       role: '経営者',
       email: 'yamada@drm.com',
