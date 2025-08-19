@@ -96,7 +96,7 @@ const mockMaterials = [
 
 export default function ConstructionDashboard() {
   const router = useRouter();
-  const { user, isLoading, logout } = useAuth();
+  const { user, isLoading } = useAuth();
   const [selectedSite, setSelectedSite] = useState<any>(null);
   const [showSiteModal, setShowSiteModal] = useState(false);
   const [showSafetyModal, setShowSafetyModal] = useState(false);
@@ -138,36 +138,7 @@ export default function ConstructionDashboard() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* ヘッダー */}
-      <nav className="bg-gradient-to-r from-orange-500 to-red-500 text-white shadow-lg">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex justify-between items-center">
-            <div>
-              <h1 className="text-2xl font-bold">施工管理ダッシュボード</h1>
-              <p className="text-sm opacity-90 mt-1">
-                {new Date().toLocaleDateString('ja-JP', {
-                  year: 'numeric',
-                  month: 'long',
-                  day: 'numeric',
-                  weekday: 'long',
-                })}
-              </p>
-            </div>
-            <div className="flex items-center gap-4">
-              <div className="text-right">
-                <p className="text-sm opacity-90">ログイン中</p>
-                <p className="font-medium">{user.name}</p>
-              </div>
-              <button
-                onClick={logout}
-                className="bg-white/20 hover:bg-white/30 px-4 py-2 rounded transition"
-              >
-                ログアウト
-              </button>
-            </div>
-          </div>
-        </div>
-      </nav>
+      {/* ヘッダーは親コンポーネントで管理するため削除 */}
 
       <div className="container mx-auto px-4 py-6">
         {/* KPIカード */}
