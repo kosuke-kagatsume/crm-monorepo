@@ -51,6 +51,12 @@ export default function DashboardPage() {
         return '経理ダッシュボード';
       case 'executive':
         return '経営ダッシュボード';
+      case 'construction':
+        return '施工管理ダッシュボード';
+      case 'office':
+        return '事務ダッシュボード';
+      case 'aftercare':
+        return 'アフターサービスダッシュボード';
       default:
         return 'ダッシュボード';
     }
@@ -69,6 +75,12 @@ export default function DashboardPage() {
         return 'from-purple-500 to-dandori-pink';
       case 'executive':
         return 'from-dandori-blue to-dandori-sky';
+      case 'construction':
+        return 'from-orange-500 to-red-500';
+      case 'office':
+        return 'from-purple-500 to-pink-500';
+      case 'aftercare':
+        return 'from-cyan-500 to-blue-500';
       default:
         return 'from-gray-600 to-gray-700';
     }
