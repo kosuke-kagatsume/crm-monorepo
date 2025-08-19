@@ -2,12 +2,17 @@
 
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, lazy, Suspense } from 'react';
 import SalesDashboard from './sales';
 import ManagerDashboard from './manager';
 import ExecutiveDashboard from './executive';
 import MarketingDashboard from './marketing';
 import AccountingDashboard from './accounting';
+
+// 動的インポートで施工管理、事務員、アフター担当のダッシュボードを読み込み
+const ConstructionDashboard = lazy(() => import('./construction/page'));
+const OfficeDashboard = lazy(() => import('./office/page'));
+const AftercareDashboard = lazy(() => import('./aftercare/page'));
 
 export default function DashboardPage() {
   const { user, isLoading, logout } = useAuth();
@@ -28,19 +33,10 @@ export default function DashboardPage() {
     return role;
   };
 
+  // リダイレクトを削除（同じページ内でコンポーネントを切り替える）
   useEffect(() => {
-    if (user) {
-      const roleMapping = getRoleMapping(user.role);
-      // Redirect to specific dashboards for new roles
-      if (roleMapping === 'construction') {
-        router.push('/dashboard/construction');
-      } else if (roleMapping === 'office') {
-        router.push('/dashboard/office');
-      } else if (roleMapping === 'aftercare') {
-        router.push('/dashboard/aftercare');
-      }
-    }
-  }, [user, router]);
+    // リダイレクト処理を削除
+  }, []);
 
   const getRoleTitle = (role: string) => {
     const mappedRole = getRoleMapping(role);
@@ -152,6 +148,39 @@ export default function DashboardPage() {
         )}
         {getRoleMapping(user.role) === 'accounting' && (
           <AccountingDashboard userEmail={user.email} />
+        )}
+        {getRoleMapping(user.role) === 'construction' && (
+          <Suspense
+            fallback={
+              <div className="flex items-center justify-center min-h-screen">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-dandori-blue"></div>
+              </div>
+            }
+          >
+            <ConstructionDashboard />
+          </Suspense>
+        )}
+        {getRoleMapping(user.role) === 'office' && (
+          <Suspense
+            fallback={
+              <div className="flex items-center justify-center min-h-screen">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-dandori-blue"></div>
+              </div>
+            }
+          >
+            <OfficeDashboard />
+          </Suspense>
+        )}
+        {getRoleMapping(user.role) === 'aftercare' && (
+          <Suspense
+            fallback={
+              <div className="flex items-center justify-center min-h-screen">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-dandori-blue"></div>
+              </div>
+            }
+          >
+            <AftercareDashboard />
+          </Suspense>
         )}
       </div>
 
