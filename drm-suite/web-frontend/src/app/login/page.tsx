@@ -9,7 +9,7 @@ interface QuickLoginAccount {
   role: string;
   email: string;
   password: string;
-  status: 'manager' | 'supervisor' | 'worker';
+  status: 'admin' | 'manager' | 'supervisor' | 'worker';
   department: string;
   permissions: string[];
   avatar: string;
